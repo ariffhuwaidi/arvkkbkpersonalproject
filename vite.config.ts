@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/arv-kkbk/',
+  base: '/arvkkbkpersonalproject/',
   server: {
     port: 5173,
     host: true
