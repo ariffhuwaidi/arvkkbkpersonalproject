@@ -1,13 +1,13 @@
 /**
  * ARV KKBK Service Worker
- * Caches ONLY the static app shell using relative paths.
+ * Caches ONLY the static app shell.
  * NEVER intercepts or caches any patient record data (which lives exclusively in IndexedDB).
  */
 
-const CACHE_NAME = 'arv-kkbk-shell-v2';
+const CACHE_NAME = 'arv-kkbk-v3';
 
-// Static app shell assets with strictly relative paths
-const APP_SHELL_ASSETS = [
+// Assets to pre-cache on install
+const PRECACHE_URLS = [
   './',
   './index.html',
   './manifest.webmanifest',
@@ -20,10 +20,9 @@ const APP_SHELL_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(APP_SHELL_ASSETS).catch((err) => {
-        // Individual missing asset during development will not break install
-        console.warn('App shell pre-cache notice:', err);
-      });
+      return cache.addAll(PRECACHE_URLS);
+    }).catch((err) => {
+      console.warn('Pre-cache notice:', err);
     }).then(() => self.skipWaiting())
   );
 });
@@ -43,39 +42,63 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests for app shell
+  // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // Never intercept non-http(s) requests or external endpoints
-  if (!url.protocol.startsWith('http')) return;
+  // Only handle same-origin HTTP(S) requests
+  if (url.origin !== self.location.origin) return;
 
+  // 1. Navigation requests (Opening the app, launching from iOS Home Screen WebClip)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // If offline or network error, return cached index.html or base
+          return caches.match(event.request).then((cached) => {
+            if (cached) return cached;
+            return caches.match('./index.html').then((fallback) => {
+              if (fallback) return fallback;
+              return caches.match('./');
+            });
+          });
+        })
+    );
+    return;
+  }
+
+  // 2. Static Assets (JS, CSS, images, icons, manifest)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse;
       }
-      return fetch(event.request).then((networkResponse) => {
-        // Only cache basic static responses from our own origin
-        if (
-          networkResponse &&
-          networkResponse.status === 200 &&
-          networkResponse.type === 'basic' &&
-          (url.pathname.endsWith('.js') ||
-           url.pathname.endsWith('.css') ||
-           url.pathname.endsWith('.svg') ||
-           url.pathname.endsWith('.png') ||
-           url.pathname.endsWith('.html') ||
-           url.pathname.endsWith('.webmanifest'))
-        ) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      });
+      return fetch(event.request)
+        .then((networkResponse) => {
+          if (
+            networkResponse &&
+            networkResponse.status === 200 &&
+            networkResponse.type === 'basic'
+          ) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, clone);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // Fallback if asset request fails
+          return cachedResponse;
+        });
     })
   );
 });
