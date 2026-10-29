@@ -1,0 +1,156 @@
+/* ==========================================================================
+   THEME VARIABLES & COLOR PALETTES (WCAG AA COMPLIANT)
+   ========================================================================== */
+
+:root {
+  /* System font stack */
+  --font-family-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  
+  /* Radii scale */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Spacing */
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 20px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  /* Safe Area Insets & Dimensions */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --header-height: calc(52px + var(--sat));
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-sheet: 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* --------------------------------------------------------------------------
+   LIGHT THEME (Default)
+   Soft neutral grey background (#F2F2F7), pure white cards, system blue accent
+   -------------------------------------------------------------------------- */
+:root,
+[data-theme="light"] {
+  --color-bg-primary: #F2F2F7;
+  --color-bg-secondary: #FFFFFF;
+  --color-bg-tertiary: #E5E5EA;
+  --color-bg-grouped: #FFFFFF;
+
+  --color-header-bg: rgba(242, 242, 247, 0.88);
+  --color-header-bg-solid: #F2F2F7;
+  --color-sheet-bg: rgba(255, 255, 255, 0.96);
+  --color-sheet-bg-solid: #FFFFFF;
+  --color-overlay-bg: rgba(0, 0, 0, 0.35);
+
+  --color-text-primary: #000000;
+  --color-text-secondary: #636366;
+  --color-text-tertiary: #8E8E93;
+  --color-text-placeholder: #AEAEB2;
+
+  --color-accent: #007AFF;
+  --color-accent-subtle: #E5F0FF;
+  --color-accent-hover: #0062CC;
+
+  --color-separator: rgba(60, 60, 67, 0.18);
+  --color-separator-opaque: #D1D1D6;
+
+  --color-input-bg: #FFFFFF;
+  --color-input-border: #C6C6C8;
+  --color-input-focus: #007AFF;
+
+  --color-destructive: #FF3B30;
+  --color-destructive-bg: #FFE5E5;
+
+  /* Status Colors */
+  --status-overdue-dot: #D32F2F;
+  --status-overdue-text: #B71C1C;
+  --status-overdue-bg: #FFEBEE;
+
+  --status-upcoming-dot: #D97706;
+  --status-upcoming-text: #92400E;
+  --status-upcoming-bg: #FEF3C7;
+
+  --status-later-dot: #4B5563;
+  --status-later-text: #374151;
+  --status-later-bg: #F3F4F6;
+
+  /* Soft Shadows */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-sheet: 0 -4px 24px rgba(0, 0, 0, 0.12);
+  --shadow-fab: 0 4px 14px rgba(0, 122, 255, 0.32);
+}
+
+/* --------------------------------------------------------------------------
+   DARK THEME
+   Deep charcoal background, slightly elevated cards, refined system blue
+   -------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #1C1C1E;
+  --color-bg-tertiary: #2C2C2E;
+  --color-bg-grouped: #1C1C1E;
+
+  --color-header-bg: rgba(28, 28, 30, 0.88);
+  --color-header-bg-solid: #1C1C1E;
+  --color-sheet-bg: rgba(36, 36, 38, 0.96);
+  --color-sheet-bg-solid: #242426;
+  --color-overlay-bg: rgba(0, 0, 0, 0.65);
+
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #A1A1A6;
+  --color-text-tertiary: #8E8E93;
+  --color-text-placeholder: #636366;
+
+  --color-accent: #0A84FF;
+  --color-accent-subtle: rgba(10, 132, 255, 0.18);
+  --color-accent-hover: #409CFF;
+
+  --color-separator: rgba(84, 84, 88, 0.45);
+  --color-separator-opaque: #38383A;
+
+  --color-input-bg: #2C2C2E;
+  --color-input-border: #3A3A3C;
+  --color-input-focus: #0A84FF;
+
+  --color-destructive: #FF453A;
+  --color-destructive-bg: rgba(255, 69, 58, 0.18);
+
+  /* Status Colors (Adapted for Dark Mode WCAG AA) */
+  --status-overdue-dot: #EF5350;
+  --status-overdue-text: #FFCDD2;
+  --status-overdue-bg: rgba(239, 83, 80, 0.2);
+
+  --status-upcoming-dot: #FBBF24;
+  --status-upcoming-text: #FDE68A;
+  --status-upcoming-bg: rgba(251, 191, 36, 0.18);
+
+  --status-later-dot: #9CA3AF;
+  --status-later-text: #D1D5DB;
+  --status-later-bg: rgba(156, 163, 175, 0.18);
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-sheet: 0 -4px 30px rgba(0, 0, 0, 0.7);
+  --shadow-fab: 0 4px 16px rgba(10, 132, 255, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

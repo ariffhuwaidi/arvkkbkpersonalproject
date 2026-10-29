@@ -1,0 +1,101 @@
+/* ==========================================================================
+   GLOBAL RESET & ACCESSIBILITY
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  font-family: var(--font-family-system);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+  min-height: -webkit-fill-available;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  overflow-x: hidden;
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+/* Accessibility Focus Rings */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Typography Helpers */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: -0.015em;
+}
+
+p {
+  color: var(--color-text-secondary);
+}
+
+button {
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  touch-action: manipulation;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: 16px; /* Strictly 16px+ to prevent iOS Safari auto-zoom */
+  color: var(--color-text-primary);
+}
+
+/* Layout container */
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: relative;
+}
+
+.main-content {
+  flex: 1;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-md);
+  padding-bottom: calc(var(--space-2xl) + 64px + var(--sab)); /* ensure room above floating button */
+}
+
+/* Visually Hidden */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
