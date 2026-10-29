@@ -86,12 +86,28 @@ export class RecordModal {
 
           <div class="form-group">
             <label class="form-label" for="field-tca">Next TCA (Appointment Date)</label>
-            <input type="date" id="field-tca" class="form-input" />
+            <div class="date-input-container">
+              <input type="date" id="field-tca" class="form-input form-date-input" />
+              <svg class="date-picker-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </div>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="field-blood-date">Blood Investigation Date ("Blood date")</label>
-            <input type="date" id="field-blood-date" class="form-input" />
+            <div class="date-input-container">
+              <input type="date" id="field-blood-date" class="form-input form-date-input" />
+              <svg class="date-picker-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </div>
             <span class="form-hint">Prefills to 1 month before TCA if untouched. Can be edited or cleared.</span>
             <span class="form-error" id="error-blood-date" style="display: none;">Blood date cannot be after Next TCA</span>
           </div>
@@ -723,6 +739,7 @@ export class RecordModal {
     });
 
     this.updateNameInputVisibility();
+    document.body.classList.add('modal-open');
     this.overlayEl.classList.add('is-open');
 
     window.setTimeout(() => {
@@ -736,6 +753,7 @@ export class RecordModal {
 
   public close(): void {
     if (!this.isOpen()) return;
+    document.body.classList.remove('modal-open');
     this.overlayEl.classList.remove('is-open');
     this.closePicker();
 

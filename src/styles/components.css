@@ -895,6 +895,8 @@ details[open] .disclosure-chevron {
 .modal-overlay {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 100;
   background-color: var(--color-overlay-bg);
   display: flex;
@@ -903,6 +905,15 @@ details[open] .disclosure-chevron {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--transition-normal);
+  overflow-x: hidden;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+}
+
+body:has(.modal-overlay.is-open),
+body.modal-open {
+  overflow: hidden !important;
+  touch-action: none;
 }
 
 .modal-overlay.is-open {
@@ -926,6 +937,8 @@ details[open] .disclosure-chevron {
   transition: transform var(--transition-sheet);
   overflow: hidden;
   padding-bottom: var(--sab);
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 @supports (backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px)) {
@@ -990,11 +1003,16 @@ details[open] .disclosure-chevron {
 .sheet-body {
   padding: var(--space-md) var(--space-lg);
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overscroll-behavior-y: contain;
 }
 
 .sheet-footer {
@@ -1015,6 +1033,9 @@ details[open] .disclosure-chevron {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .form-label {
@@ -1037,6 +1058,8 @@ details[open] .disclosure-chevron {
 .form-input,
 .form-textarea {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   font-size: 16px; /* Strictly 16px to prevent iOS auto-zoom */
   padding: 10px 14px;
   border-radius: var(--radius-md);
@@ -1057,6 +1080,66 @@ details[open] .disclosure-chevron {
   border-color: var(--color-input-focus);
   outline: none;
   box-shadow: 0 0 0 3px var(--color-accent-subtle);
+}
+
+/* Date Input Container & iOS Safari Centering/Sizing Fix */
+.date-input-container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.date-input-container .form-date-input {
+  width: 100%;
+  max-width: 100%;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 42px 0 14px;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 44px;
+  text-align: left;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-input-border);
+  margin: 0;
+}
+
+/* Ensure native date text inside iOS Safari aligns properly and vertically centers */
+.form-date-input::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+  padding: 0;
+  height: 44px;
+  line-height: 44px;
+  display: block;
+}
+
+.date-input-container .date-picker-icon {
+  position: absolute;
+  right: 14px;
+  pointer-events: none;
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+/* On Chrome / Edge, transparent overlay indicator over the icon */
+.form-date-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 /* Patient Picker Button (Searchable dropdown trigger for Existing) */
