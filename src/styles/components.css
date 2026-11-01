@@ -738,7 +738,7 @@ details[open] .disclosure-chevron {
 }
 
 /* --------------------------------------------------------------------------
-   BOTTOM TAB BAR (MOBILE ONLY, < 900px, LIQUID GLASS)
+   BOTTOM TAB BAR (MOBILE ONLY, < 900px, NATIVE APPLE iOS APP STORE STYLE)
    -------------------------------------------------------------------------- */
 .bottom-tab-bar {
   position: fixed;
@@ -749,18 +749,29 @@ details[open] .disclosure-chevron {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  height: calc(54px + var(--sab));
+  height: calc(49px + var(--sab));
   padding-bottom: var(--sab);
-  background-color: var(--color-header-bg-solid);
-  border-top: 0.5px solid var(--color-separator);
+  background-color: rgba(249, 249, 249, 0.88);
+  border-top: 0.5px solid rgba(60, 60, 67, 0.2);
   transition: transform var(--transition-normal);
 }
 
-@supports (backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px)) {
+@supports (backdrop-filter: blur(25px)) or (-webkit-backdrop-filter: blur(25px)) {
   .bottom-tab-bar {
-    background-color: var(--color-header-bg);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background-color: rgba(249, 249, 249, 0.82);
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
+  }
+}
+
+[data-theme="dark"] .bottom-tab-bar {
+  background-color: rgba(28, 28, 30, 0.88);
+  border-top: 0.5px solid rgba(255, 255, 255, 0.15);
+}
+
+@supports (backdrop-filter: blur(25px)) or (-webkit-backdrop-filter: blur(25px)) {
+  [data-theme="dark"] .bottom-tab-bar {
+    background-color: rgba(28, 28, 30, 0.82);
   }
 }
 
@@ -781,25 +792,46 @@ details[open] .disclosure-chevron {
   align-items: center;
   justify-content: center;
   flex: 1;
-  height: 50px; /* >= 44px touch target */
+  height: 48px; /* >= 44px touch target */
   min-width: 44px;
-  color: var(--color-text-tertiary);
-  transition: color var(--transition-fast);
+  color: #8E8E93;
+  transition: color var(--transition-fast), transform var(--transition-fast);
+  padding: 2px 0;
+  user-select: none;
+}
+
+.tab-item:active {
+  opacity: 0.7;
+  transform: scale(0.98);
+}
+
+.tab-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
 }
 
 .tab-icon {
   width: 22px;
   height: 22px;
+  stroke-width: 1.85px;
+  transition: stroke-width var(--transition-fast), transform var(--transition-fast);
 }
 
 .tab-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
-  margin-top: 2px;
+  letter-spacing: -0.01em;
+  margin-top: 1px;
 }
 
 .tab-item.is-active {
   color: var(--color-accent);
+}
+
+.tab-item.is-active .tab-icon {
+  stroke-width: 2.3px;
 }
 
 .tab-item.is-active .tab-label {
@@ -2006,3 +2038,315 @@ body.modal-open {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* --------------------------------------------------------------------------
+   APPLE APP STORE-INSPIRED ACTION MENU & CONTEXT DROPDOWN
+   -------------------------------------------------------------------------- */
+.ios-action-menu {
+  background-color: #FFFFFF;
+  border: 0.5px solid var(--color-separator);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
+  padding: 5px;
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  animation: iosMenuPop 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .ios-action-menu {
+  background-color: #2C2C2E;
+  border: 0.5px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes iosMenuPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ios-menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ios-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.ios-menu-item:hover,
+.ios-menu-item:focus-visible {
+  background-color: rgba(0, 122, 255, 0.08);
+  color: var(--color-accent);
+}
+
+.ios-menu-item:active {
+  background-color: rgba(0, 122, 255, 0.15);
+}
+
+.ios-menu-item.is-destructive {
+  color: var(--color-destructive);
+}
+
+.ios-menu-item.is-destructive:hover,
+.ios-menu-item.is-destructive:focus-visible {
+  background-color: var(--color-destructive-bg);
+  color: var(--color-destructive);
+}
+
+.ios-menu-icon {
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.ios-menu-separator {
+  height: 0.5px;
+  background-color: var(--color-separator);
+  margin: 4px 6px;
+}
+
+/* --------------------------------------------------------------------------
+   DYNAMIC EXISTING PATIENT PICKER (Requirement 1)
+   -------------------------------------------------------------------------- */
+.existing-picker-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  margin-top: 4px;
+}
+
+.existing-search-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-mini-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+}
+
+.existing-search-input {
+  height: 36px;
+  padding-left: 32px;
+  font-size: 13.5px;
+  border-radius: 8px;
+  background-color: var(--color-bg-secondary);
+}
+
+.existing-patient-select {
+  height: 40px;
+  font-size: 14px;
+  border-radius: 8px;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-input-border);
+  cursor: pointer;
+}
+
+.picker-empty-state {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-secondary);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--color-separator);
+  text-align: center;
+}
+
+.selected-patient-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: var(--color-accent-subtle);
+  color: var(--color-accent);
+  font-size: 13px;
+}
+
+.selected-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-clear-pill {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-clear-pill:hover {
+  background-color: var(--color-accent);
+  color: #FFFFFF;
+}
+
+/* --------------------------------------------------------------------------
+   APPLE APP STORE-INSPIRED CARD ACTIONS & BADGES
+   -------------------------------------------------------------------------- */
+.patient-type-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 5px;
+  letter-spacing: 0.01em;
+}
+
+.patient-type-tag.type-new {
+  background-color: #E5F0FF;
+  color: #007AFF;
+}
+
+.patient-type-tag.type-existing {
+  background-color: #F2F2F7;
+  color: #636366;
+}
+
+[data-theme="dark"] .patient-type-tag.type-new {
+  background-color: rgba(10, 132, 255, 0.2);
+  color: #64D2FF;
+}
+
+[data-theme="dark"] .patient-type-tag.type-existing {
+  background-color: #2C2C2E;
+  color: #8E8E93;
+}
+
+.card-direct-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--color-separator);
+}
+
+.card-action-btn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.card-action-btn:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.card-action-btn.btn-action-view {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.card-action-btn.btn-action-view:hover {
+  background-color: var(--color-accent-subtle);
+}
+
+.card-action-btn.btn-action-delete {
+  color: var(--color-destructive);
+}
+
+.card-action-btn.btn-action-delete:hover {
+  background-color: var(--color-destructive-bg);
+}
+
+/* --------------------------------------------------------------------------
+   DASHBOARD REFINED SUMMARY STRIP (Requirement 4)
+   -------------------------------------------------------------------------- */
+.ios-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+@media (min-width: 600px) {
+  .ios-summary-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.ios-summary-card {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+  background-color: var(--color-bg-secondary);
+  border: 0.5px solid var(--color-separator);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: transform var(--transition-fast);
+}
+
+.ios-summary-card:hover {
+  transform: translateY(-1px);
+}
+
+.ios-summary-val {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+}
+
+.ios-summary-val.color-overdue {
+  color: var(--color-destructive);
+}
+
+.ios-summary-val.color-upcoming {
+  color: #FF9500;
+}
+
+.ios-summary-val.color-accent {
+  color: var(--color-accent);
+}
+
+.ios-summary-lbl {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+

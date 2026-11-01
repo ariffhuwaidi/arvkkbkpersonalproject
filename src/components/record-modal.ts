@@ -1,8 +1,24 @@
 import { BLOOD_INVESTIGATION_OPTIONS } from '../types';
-import type { PatientRecord, PatientType, BloodInvestigationOption } from '../types';
+import type { PatientRecord, PatientType } from '../types';
 import { getOneMonthBeforeISO } from '../utils/date';
 import { normalizeCode } from '../utils/search';
 import { confirmSheet } from './confirm-sheet';
+
+function maskIC(ic: string): string {
+  const clean = (ic || '').trim();
+  if (clean.length <= 4) return clean;
+  const last4 = clean.slice(-4);
+  return `••••-••-${last4}`;
+}
+
+function escapeHTML(str: string): string {
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 export class RecordModal {
   private overlayEl: HTMLElement;
@@ -12,6 +28,7 @@ export class RecordModal {
   private isBloodDateManuallyEdited = false;
   private onSaveCallback: ((record: Omit<PatientRecord, 'createdAt' | 'updatedAt'> & { createdAt?: string; updatedAt?: string }) => Promise<void>) | null = null;
   private previousActiveElement: HTMLElement | null = null;
+  private existingSearchQuery = '';
 
   constructor() {
     this.overlayEl = document.createElement('div');
@@ -39,7 +56,7 @@ export class RecordModal {
       <div class="bottom-sheet">
         <div class="sheet-grab-bar"></div>
         <div class="sheet-header">
-          <span class="sheet-title" id="form-modal-title">New Patient Registration</span>
+          <span class="sheet-title" id="form-modal-title">Add Patient</span>
           <button type="button" class="btn-icon" data-action="close" aria-label="Cancel and close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -56,6 +73,49 @@ export class RecordModal {
             </div>
             <input type="hidden" id="field-patient-type" value="Existing" />
             <span class="form-hint">Categorize patient as New Patient or Existing Patient (editable anytime).</span>
+          </div>
+
+          <!-- DYNAMIC EXISTING PATIENT DROPDOWN & PICKER (Requirement 1) -->
+          <div class="form-group" id="group-existing-picker" style="display: none;">
+            <label class="form-label" for="select-existing-patient">Select Existing Patient</label>
+            <div class="existing-picker-container">
+              <div class="existing-search-row">
+                <svg class="search-mini-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input
+                  type="search"
+                  id="filter-existing-patients"
+                  class="form-input existing-search-input"
+                  placeholder="Filter existing patients by name or IC..."
+                  autocomplete="off"
+                />
+              </div>
+
+              <select id="select-existing-patient" class="form-input form-select existing-patient-select">
+                <option value="">-- Choose an existing patient --</option>
+              </select>
+
+              <div id="existing-picker-empty" class="picker-empty-state" style="display: none;">
+                No existing patients available in the system yet. Switch to "New Patient" above to register a patient.
+              </div>
+
+              <div id="existing-selected-banner" class="selected-patient-banner" style="display: none;">
+                <div class="selected-banner-info">
+                  <svg class="selected-banner-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  <div>
+                    <span id="existing-selected-name" style="font-weight: 600;"></span>
+                    <span id="existing-selected-meta" style="font-size: 12px; color: var(--color-text-secondary); margin-left: 6px;"></span>
+                  </div>
+                </div>
+                <button type="button" id="btn-clear-existing-selection" class="btn-clear-pill">Clear</button>
+              </div>
+            </div>
+            <span class="form-hint">Selecting an existing patient preserves their Patient ID and complete appointment history.</span>
           </div>
 
           <div class="form-group" id="group-patient-name">
@@ -86,7 +146,7 @@ export class RecordModal {
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
             </div>
-            <span class="form-hint">Optional. Creates an initial scheduled appointment for this patient.</span>
+            <span class="form-hint">Optional. Creates or updates a scheduled appointment for this patient.</span>
           </div>
 
           <div class="form-group">
@@ -145,12 +205,54 @@ export class RecordModal {
     const otherInput = this.overlayEl.querySelector('#field-blood-other') as HTMLInputElement;
     const otherError = this.overlayEl.querySelector('#error-blood-other') as HTMLElement;
 
-    // Segmented patient category toggle: smoothly changes category without clearing data
+    const existingSelect = this.overlayEl.querySelector('#select-existing-patient') as HTMLSelectElement;
+    const existingSearch = this.overlayEl.querySelector('#filter-existing-patients') as HTMLInputElement;
+    const clearExistingBtn = this.overlayEl.querySelector('#btn-clear-existing-selection') as HTMLButtonElement;
+
+    // Segmented patient category toggle: changes category and updates existing dropdown visibility in Add mode
     segContainer.addEventListener('click', (e) => {
       const target = (e.target as HTMLElement).closest('.segment-btn') as HTMLButtonElement;
       if (!target) return;
       const targetVal = target.getAttribute('data-value') as PatientType;
       this.setPatientCategoryUI(targetVal);
+
+      if (!this.isEditMode) {
+        if (targetVal === 'Existing') {
+          this.showExistingPicker(true);
+        } else {
+          this.showExistingPicker(false);
+          // If we had an existing patient selected, reset currentRecord so new patient registration is clean
+          if (this.currentRecord) {
+            this.clearSelectedExistingPatient();
+          }
+        }
+      }
+    });
+
+    // Existing patient search filter
+    existingSearch.addEventListener('input', () => {
+      this.existingSearchQuery = existingSearch.value.trim().toLowerCase();
+      this.populateExistingDropdown();
+    });
+
+    // Existing patient select change
+    existingSelect.addEventListener('change', () => {
+      const selectedId = existingSelect.value;
+      if (!selectedId) {
+        this.clearSelectedExistingPatient();
+        return;
+      }
+
+      const match = this.savedRecords.find(r => r.id === selectedId);
+      if (match) {
+        this.applySelectedExistingPatient(match);
+      }
+    });
+
+    // Clear existing patient selection button
+    clearExistingBtn.addEventListener('click', () => {
+      this.clearSelectedExistingPatient();
+      existingSelect.value = '';
     });
 
     // Toggle investigation chips
@@ -216,6 +318,135 @@ export class RecordModal {
     });
   }
 
+  private showExistingPicker(show: boolean): void {
+    const pickerGroup = this.overlayEl.querySelector('#group-existing-picker') as HTMLElement;
+    pickerGroup.style.display = show ? 'block' : 'none';
+    if (show) {
+      this.populateExistingDropdown();
+    }
+  }
+
+  private populateExistingDropdown(): void {
+    const existingSelect = this.overlayEl.querySelector('#select-existing-patient') as HTMLSelectElement;
+    const emptyNotice = this.overlayEl.querySelector('#existing-picker-empty') as HTMLElement;
+
+    // Filter to existing patients (those categorized as Existing or active registered clinic patients)
+    let candidates = this.savedRecords.filter(r => r.patientType === 'Existing');
+    if (candidates.length === 0 && this.savedRecords.length > 0) {
+      // Fallback: if no patients are explicitly tagged Existing yet, display all saved patients
+      candidates = this.savedRecords;
+    }
+
+    if (this.existingSearchQuery) {
+      const query = this.existingSearchQuery;
+      candidates = candidates.filter(r =>
+        r.name.toLowerCase().includes(query) ||
+        r.icNumber.toLowerCase().includes(query) ||
+        (r.phone && r.phone.toLowerCase().includes(query))
+      );
+    }
+
+    // Deduplicate by ID
+    const seen = new Set<string>();
+    const uniqueCandidates: PatientRecord[] = [];
+    for (const c of candidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        uniqueCandidates.push(c);
+      }
+    }
+
+    // Sort alphabetically by name
+    uniqueCandidates.sort((a, b) => a.name.localeCompare(b.name));
+
+    existingSelect.innerHTML = '';
+
+    if (uniqueCandidates.length === 0) {
+      existingSelect.innerHTML = `<option value="">-- No matching existing patients found --</option>`;
+      emptyNotice.style.display = 'block';
+      return;
+    }
+
+    emptyNotice.style.display = 'none';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = `-- Select an existing patient (${uniqueCandidates.length} available) --`;
+    existingSelect.appendChild(defaultOpt);
+
+    for (const patient of uniqueCandidates) {
+      const opt = document.createElement('option');
+      opt.value = patient.id;
+      // Privacy-conscious format: Name (IC: ••••-••-1234, ID: rec-...)
+      opt.textContent = `${patient.name} (${maskIC(patient.icNumber)})`;
+      if (this.currentRecord && this.currentRecord.id === patient.id) {
+        opt.selected = true;
+      }
+      existingSelect.appendChild(opt);
+    }
+  }
+
+  private applySelectedExistingPatient(patient: PatientRecord): void {
+    this.currentRecord = patient;
+
+    const nameInput = this.overlayEl.querySelector('#field-name') as HTMLInputElement;
+    const icInput = this.overlayEl.querySelector('#field-ic') as HTMLInputElement;
+    const phoneInput = this.overlayEl.querySelector('#field-phone') as HTMLInputElement;
+    const tcaInput = this.overlayEl.querySelector('#field-tca') as HTMLInputElement;
+    const bloodInput = this.overlayEl.querySelector('#field-blood-date') as HTMLInputElement;
+    const otherInput = this.overlayEl.querySelector('#field-blood-other') as HTMLInputElement;
+    const planInput = this.overlayEl.querySelector('#field-plan') as HTMLTextAreaElement;
+
+    nameInput.value = patient.name;
+    icInput.value = patient.icNumber;
+    phoneInput.value = patient.phone || '';
+    tcaInput.value = patient.nextTca || '';
+    bloodInput.value = patient.bloodInvestigationDate || '';
+    otherInput.value = patient.bloodOther || '';
+    planInput.value = patient.plan || '';
+
+    this.isBloodDateManuallyEdited = Boolean(patient.bloodInvestigationDate);
+    this.setSelectedInvestigations(patient.bloodInvestigations || []);
+
+    // Show selection banner
+    const banner = this.overlayEl.querySelector('#existing-selected-banner') as HTMLElement;
+    const nameSpan = this.overlayEl.querySelector('#existing-selected-name') as HTMLElement;
+    const metaSpan = this.overlayEl.querySelector('#existing-selected-meta') as HTMLElement;
+
+    nameSpan.textContent = patient.name;
+    metaSpan.textContent = `(${maskIC(patient.icNumber)} • ID: ${patient.id})`;
+    banner.style.display = 'flex';
+
+    // Clear validation errors
+    (this.overlayEl.querySelector('#error-name') as HTMLElement).style.display = 'none';
+    (this.overlayEl.querySelector('#error-ic') as HTMLElement).style.display = 'none';
+  }
+
+  private clearSelectedExistingPatient(): void {
+    this.currentRecord = null;
+
+    const nameInput = this.overlayEl.querySelector('#field-name') as HTMLInputElement;
+    const icInput = this.overlayEl.querySelector('#field-ic') as HTMLInputElement;
+    const phoneInput = this.overlayEl.querySelector('#field-phone') as HTMLInputElement;
+    const tcaInput = this.overlayEl.querySelector('#field-tca') as HTMLInputElement;
+    const bloodInput = this.overlayEl.querySelector('#field-blood-date') as HTMLInputElement;
+    const otherInput = this.overlayEl.querySelector('#field-blood-other') as HTMLInputElement;
+    const planInput = this.overlayEl.querySelector('#field-plan') as HTMLTextAreaElement;
+
+    nameInput.value = '';
+    icInput.value = '';
+    phoneInput.value = '';
+    tcaInput.value = '';
+    bloodInput.value = '';
+    otherInput.value = '';
+    planInput.value = '';
+
+    this.isBloodDateManuallyEdited = false;
+    this.setSelectedInvestigations([]);
+
+    const banner = this.overlayEl.querySelector('#existing-selected-banner') as HTMLElement;
+    banner.style.display = 'none';
+  }
+
   private setPatientCategoryUI(type: PatientType): void {
     const typeInput = this.overlayEl.querySelector('#field-patient-type') as HTMLInputElement;
     typeInput.value = type;
@@ -251,11 +482,6 @@ export class RecordModal {
     });
 
     otherContainer.style.display = set.has('Other') ? 'flex' : 'none';
-  }
-
-  private getPatientTypeValue(): PatientType {
-    const typeInput = this.overlayEl.querySelector('#field-patient-type') as HTMLInputElement;
-    return (typeInput.value as PatientType) || 'Existing';
   }
 
   private validateBloodDate(): boolean {
@@ -334,8 +560,9 @@ export class RecordModal {
     const trimmedIc = icInput.value.trim();
     const normalizedNewIc = normalizeCode(trimmedIc);
 
-    // Duplicate IC check when saving a new patient
-    if (!this.isEditMode) {
+    // Duplicate IC check when saving a new patient (unless updating selected existing patient)
+    const isNew = !this.currentRecord;
+    if (isNew) {
       const existingMatch = this.savedRecords.find(
         r => normalizeCode(r.icNumber) === normalizedNewIc
       );
@@ -381,7 +608,7 @@ export class RecordModal {
       this.close();
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Patient';
+      saveBtn.textContent = this.isEditMode ? 'Save Changes' : 'Save Patient';
     }
   }
 
@@ -396,8 +623,10 @@ export class RecordModal {
     this.isEditMode = Boolean(record);
     this.onSaveCallback = onSave;
     this.previousActiveElement = triggerEl || (document.activeElement as HTMLElement);
+    this.existingSearchQuery = '';
 
     const titleEl = this.overlayEl.querySelector('#form-modal-title') as HTMLElement;
+    const saveBtn = this.overlayEl.querySelector('#btn-save-record') as HTMLButtonElement;
     const nameInput = this.overlayEl.querySelector('#field-name') as HTMLInputElement;
     const icInput = this.overlayEl.querySelector('#field-ic') as HTMLInputElement;
     const phoneInput = this.overlayEl.querySelector('#field-phone') as HTMLInputElement;
@@ -406,6 +635,8 @@ export class RecordModal {
     const bloodInput = this.overlayEl.querySelector('#field-blood-date') as HTMLInputElement;
     const otherInput = this.overlayEl.querySelector('#field-blood-other') as HTMLInputElement;
     const planInput = this.overlayEl.querySelector('#field-plan') as HTMLTextAreaElement;
+    const existingSearch = this.overlayEl.querySelector('#filter-existing-patients') as HTMLInputElement;
+    existingSearch.value = '';
 
     const errorName = this.overlayEl.querySelector('#error-name') as HTMLElement;
     const errorIc = this.overlayEl.querySelector('#error-ic') as HTMLElement;
@@ -417,7 +648,9 @@ export class RecordModal {
     errorOther.style.display = 'none';
 
     if (record) {
-      titleEl.textContent = 'Edit Patient Record';
+      // Edit Mode
+      titleEl.textContent = 'Edit Patient Details';
+      saveBtn.textContent = 'Save Changes';
       nameInput.value = record.name;
       icInput.value = record.icNumber;
       phoneInput.value = record.phone || '';
@@ -428,8 +661,11 @@ export class RecordModal {
       planInput.value = record.plan || '';
       this.isBloodDateManuallyEdited = Boolean(record.bloodInvestigationDate);
       this.setSelectedInvestigations(record.bloodInvestigations || []);
+      this.showExistingPicker(false);
     } else {
-      titleEl.textContent = 'New Patient Registration';
+      // Add Mode: heading is "Add Patient" (Requirement 3)
+      titleEl.textContent = 'Add Patient';
+      saveBtn.textContent = 'Save Patient';
       nameInput.value = '';
       icInput.value = '';
       phoneInput.value = '';
@@ -440,6 +676,10 @@ export class RecordModal {
       planInput.value = '';
       this.isBloodDateManuallyEdited = false;
       this.setSelectedInvestigations([]);
+
+      // In Add Mode with Existing category active, show dynamic existing picker (Requirement 1)
+      this.showExistingPicker(true);
+      (this.overlayEl.querySelector('#existing-selected-banner') as HTMLElement).style.display = 'none';
     }
 
     this.setPatientCategoryUI((typeInput.value as PatientType) || 'Existing');
@@ -448,7 +688,12 @@ export class RecordModal {
     this.overlayEl.classList.add('is-open');
 
     window.setTimeout(() => {
-      nameInput.focus();
+      if (!record && typeInput.value === 'Existing') {
+        const existingSelect = this.overlayEl.querySelector('#select-existing-patient') as HTMLElement;
+        existingSelect.focus();
+      } else {
+        nameInput.focus();
+      }
     }, 100);
   }
 

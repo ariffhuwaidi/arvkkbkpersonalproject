@@ -1787,7 +1787,7 @@ function validateImportJSON(rawText        )                   {
   // --- Module: components/record-card ---
                                                            
 function escapeHTML(str        )         {
-  return str
+  return (str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -1838,8 +1838,8 @@ function createRecordCard(
   // Patient category subtle label
   const isNew = record.patientType === 'New';
   const patientTypeLabel = isNew
-    ? `<span class="patient-type-tag type-new">• New Patient</span>`
-    : `<span class="patient-type-tag type-existing">• Existing Patient</span>`;
+    ? `<span class="patient-type-tag type-new">New Patient</span>`
+    : `<span class="patient-type-tag type-existing">Existing Patient</span>`;
 
   // Deactivated status tag
   const inactiveBadge = record.isActive === false
@@ -1848,7 +1848,7 @@ function createRecordCard(
 
   const phoneHtml = record.phone
     ? `<div class="meta-item">
-        <svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="meta-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
         </svg>
         <span>${escapeHTML(record.phone)}</span>
@@ -1918,9 +1918,9 @@ function createRecordCard(
         ${tcaBadgeHtml}
         <button type="button" class="btn-card-menu" aria-label="Patient actions" title="Patient Actions" aria-haspopup="true">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="1"></circle>
-            <circle cx="19" cy="12" r="1"></circle>
-            <circle cx="5" cy="12" r="1"></circle>
+            <circle cx="12" cy="12" r="1.5"></circle>
+            <circle cx="19" cy="12" r="1.5"></circle>
+            <circle cx="5" cy="12" r="1.5"></circle>
           </svg>
         </button>
       </div>
@@ -1932,7 +1932,7 @@ function createRecordCard(
 
     <div class="card-meta-row">
       <div class="meta-item">
-        <svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="meta-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="4" width="18" height="16" rx="2"></rect>
           <line x1="7" y1="8" x2="17" y2="8"></line>
           <line x1="7" y1="12" x2="13" y2="12"></line>
@@ -1944,7 +1944,7 @@ function createRecordCard(
 
     ${planPreviewHtml}
 
-    <div class="card-direct-actions" style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 0.5px solid var(--color-separator);">
+    <div class="card-direct-actions">
       <button type="button" class="card-action-btn btn-action-view" data-card-action="view">View</button>
       <button type="button" class="card-action-btn btn-action-edit" data-card-action="edit">Edit</button>
       <button type="button" class="card-action-btn btn-action-deactivate" data-card-action="toggle-active">
@@ -1993,6 +1993,7 @@ function createRecordCard(
 
 /**
  * Creates and shows an action dropdown anchored to the card menu button
+ * Completely free of emojis, uses minimalist SVG line icons and Apple-style menu styling.
  */
 function openCardDropdownMenu(
   triggerBtn             ,
@@ -2008,15 +2009,15 @@ function openCardDropdownMenu(
   overlay.style.backgroundColor = 'transparent';
 
   const menu = document.createElement('div');
-  menu.className = 'sort-dropdown-menu is-anchored';
-  menu.style.width = '220px';
+  menu.className = 'sort-dropdown-menu is-anchored ios-action-menu';
+  menu.style.width = '210px';
 
   const rect = triggerBtn.getBoundingClientRect();
-  let left = rect.right - 220;
+  let left = rect.right - 210;
   if (left < 10) left = 10;
-  let top = rect.bottom + 4;
-  if (top + 240 > window.innerHeight && rect.top > 250) {
-    top = Math.max(10, rect.top - 240);
+  let top = rect.bottom + 6;
+  if (top + 230 > window.innerHeight && rect.top > 240) {
+    top = Math.max(10, rect.top - 230);
   }
 
   menu.style.position = 'fixed';
@@ -2026,27 +2027,54 @@ function openCardDropdownMenu(
   menu.style.bottom = 'auto';
 
   const isNew = record.patientType === 'New';
-  const switchCategoryText = isNew ? 'Switch to Existing Patient' : 'Switch to New Patient';
   const newCategoryTarget              = isNew ? 'Existing' : 'New';
-
   const isCurrentlyActive = record.isActive !== false;
 
   menu.innerHTML = `
-    <div style="display: flex; flex-direction: column; padding: 4px;">
-      <button type="button" class="sort-dropdown-item" data-menu-action="view">
-        <span>👁 View Profile</span>
+    <div class="ios-menu-group" role="menu">
+      <button type="button" class="ios-menu-item" data-menu-action="view" role="menuitem">
+        <svg class="ios-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        <span>View Profile</span>
       </button>
-      <button type="button" class="sort-dropdown-item" data-menu-action="edit">
-        <span>✎ Edit Patient Details</span>
+
+      <button type="button" class="ios-menu-item" data-menu-action="edit" role="menuitem">
+        <svg class="ios-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+        <span>Edit Patient</span>
       </button>
-      <button type="button" class="sort-dropdown-item" data-menu-action="category">
-        <span>🏷 ${switchCategoryText}</span>
+
+      <button type="button" class="ios-menu-item" data-menu-action="category" role="menuitem">
+        <svg class="ios-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+          <line x1="7" y1="7" x2="7.01" y2="7"></line>
+        </svg>
+        <span>Change Category</span>
       </button>
-      <button type="button" class="sort-dropdown-item" data-menu-action="toggle-active">
-        <span>${isCurrentlyActive ? '🚫 Deactivate Patient' : '✓ Reactivate Patient'}</span>
+
+      <button type="button" class="ios-menu-item" data-menu-action="toggle-active" role="menuitem">
+        <svg class="ios-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          ${isCurrentlyActive
+            ? '<circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>'
+            : '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>'}
+        </svg>
+        <span>${isCurrentlyActive ? 'Deactivate Patient' : 'Reactivate Patient'}</span>
       </button>
-      <button type="button" class="sort-dropdown-item" data-menu-action="delete" style="color: var(--color-destructive);">
-        <span>🗑 Delete Patient Record</span>
+
+      <div class="ios-menu-separator"></div>
+
+      <button type="button" class="ios-menu-item is-destructive" data-menu-action="delete" role="menuitem">
+        <svg class="ios-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+        <span>Delete Patient</span>
       </button>
     </div>
   `;
@@ -2239,6 +2267,22 @@ class SortSheet {
 
 
   // --- Module: components/record-modal ---
+function maskIC(ic        )         {
+  const clean = (ic || '').trim();
+  if (clean.length <= 4) return clean;
+  const last4 = clean.slice(-4);
+  return `••••-••-${last4}`;
+}
+
+function escapeHTML(str        )         {
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 class RecordModal {
           overlayEl             ;
           currentRecord                       = null;
@@ -2247,6 +2291,7 @@ class RecordModal {
           isBloodDateManuallyEdited = false;
           onSaveCallback                                                                                                                                  = null;
           previousActiveElement                     = null;
+          existingSearchQuery = '';
 
   constructor() {
     this.overlayEl = document.createElement('div');
@@ -2274,7 +2319,7 @@ class RecordModal {
       <div class="bottom-sheet">
         <div class="sheet-grab-bar"></div>
         <div class="sheet-header">
-          <span class="sheet-title" id="form-modal-title">New Patient Registration</span>
+          <span class="sheet-title" id="form-modal-title">Add Patient</span>
           <button type="button" class="btn-icon" data-action="close" aria-label="Cancel and close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -2291,6 +2336,49 @@ class RecordModal {
             </div>
             <input type="hidden" id="field-patient-type" value="Existing" />
             <span class="form-hint">Categorize patient as New Patient or Existing Patient (editable anytime).</span>
+          </div>
+
+          <!-- DYNAMIC EXISTING PATIENT DROPDOWN & PICKER (Requirement 1) -->
+          <div class="form-group" id="group-existing-picker" style="display: none;">
+            <label class="form-label" for="select-existing-patient">Select Existing Patient</label>
+            <div class="existing-picker-container">
+              <div class="existing-search-row">
+                <svg class="search-mini-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input
+                  type="search"
+                  id="filter-existing-patients"
+                  class="form-input existing-search-input"
+                  placeholder="Filter existing patients by name or IC..."
+                  autocomplete="off"
+                />
+              </div>
+
+              <select id="select-existing-patient" class="form-input form-select existing-patient-select">
+                <option value="">-- Choose an existing patient --</option>
+              </select>
+
+              <div id="existing-picker-empty" class="picker-empty-state" style="display: none;">
+                No existing patients available in the system yet. Switch to "New Patient" above to register a patient.
+              </div>
+
+              <div id="existing-selected-banner" class="selected-patient-banner" style="display: none;">
+                <div class="selected-banner-info">
+                  <svg class="selected-banner-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  <div>
+                    <span id="existing-selected-name" style="font-weight: 600;"></span>
+                    <span id="existing-selected-meta" style="font-size: 12px; color: var(--color-text-secondary); margin-left: 6px;"></span>
+                  </div>
+                </div>
+                <button type="button" id="btn-clear-existing-selection" class="btn-clear-pill">Clear</button>
+              </div>
+            </div>
+            <span class="form-hint">Selecting an existing patient preserves their Patient ID and complete appointment history.</span>
           </div>
 
           <div class="form-group" id="group-patient-name">
@@ -2321,7 +2409,7 @@ class RecordModal {
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
             </div>
-            <span class="form-hint">Optional. Creates an initial scheduled appointment for this patient.</span>
+            <span class="form-hint">Optional. Creates or updates a scheduled appointment for this patient.</span>
           </div>
 
           <div class="form-group">
@@ -2380,12 +2468,54 @@ class RecordModal {
     const otherInput = this.overlayEl.querySelector('#field-blood-other')                    ;
     const otherError = this.overlayEl.querySelector('#error-blood-other')               ;
 
-    // Segmented patient category toggle: smoothly changes category without clearing data
+    const existingSelect = this.overlayEl.querySelector('#select-existing-patient')                     ;
+    const existingSearch = this.overlayEl.querySelector('#filter-existing-patients')                    ;
+    const clearExistingBtn = this.overlayEl.querySelector('#btn-clear-existing-selection')                     ;
+
+    // Segmented patient category toggle: changes category and updates existing dropdown visibility in Add mode
     segContainer.addEventListener('click', (e) => {
       const target = (e.target               ).closest('.segment-btn')                     ;
       if (!target) return;
       const targetVal = target.getAttribute('data-value')               ;
       this.setPatientCategoryUI(targetVal);
+
+      if (!this.isEditMode) {
+        if (targetVal === 'Existing') {
+          this.showExistingPicker(true);
+        } else {
+          this.showExistingPicker(false);
+          // If we had an existing patient selected, reset currentRecord so new patient registration is clean
+          if (this.currentRecord) {
+            this.clearSelectedExistingPatient();
+          }
+        }
+      }
+    });
+
+    // Existing patient search filter
+    existingSearch.addEventListener('input', () => {
+      this.existingSearchQuery = existingSearch.value.trim().toLowerCase();
+      this.populateExistingDropdown();
+    });
+
+    // Existing patient select change
+    existingSelect.addEventListener('change', () => {
+      const selectedId = existingSelect.value;
+      if (!selectedId) {
+        this.clearSelectedExistingPatient();
+        return;
+      }
+
+      const match = this.savedRecords.find(r => r.id === selectedId);
+      if (match) {
+        this.applySelectedExistingPatient(match);
+      }
+    });
+
+    // Clear existing patient selection button
+    clearExistingBtn.addEventListener('click', () => {
+      this.clearSelectedExistingPatient();
+      existingSelect.value = '';
     });
 
     // Toggle investigation chips
@@ -2451,6 +2581,135 @@ class RecordModal {
     });
   }
 
+          showExistingPicker(show         )       {
+    const pickerGroup = this.overlayEl.querySelector('#group-existing-picker')               ;
+    pickerGroup.style.display = show ? 'block' : 'none';
+    if (show) {
+      this.populateExistingDropdown();
+    }
+  }
+
+          populateExistingDropdown()       {
+    const existingSelect = this.overlayEl.querySelector('#select-existing-patient')                     ;
+    const emptyNotice = this.overlayEl.querySelector('#existing-picker-empty')               ;
+
+    // Filter to existing patients (those categorized as Existing or active registered clinic patients)
+    let candidates = this.savedRecords.filter(r => r.patientType === 'Existing');
+    if (candidates.length === 0 && this.savedRecords.length > 0) {
+      // Fallback: if no patients are explicitly tagged Existing yet, display all saved patients
+      candidates = this.savedRecords;
+    }
+
+    if (this.existingSearchQuery) {
+      const query = this.existingSearchQuery;
+      candidates = candidates.filter(r =>
+        r.name.toLowerCase().includes(query) ||
+        r.icNumber.toLowerCase().includes(query) ||
+        (r.phone && r.phone.toLowerCase().includes(query))
+      );
+    }
+
+    // Deduplicate by ID
+    const seen = new Set        ();
+    const uniqueCandidates                  = [];
+    for (const c of candidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        uniqueCandidates.push(c);
+      }
+    }
+
+    // Sort alphabetically by name
+    uniqueCandidates.sort((a, b) => a.name.localeCompare(b.name));
+
+    existingSelect.innerHTML = '';
+
+    if (uniqueCandidates.length === 0) {
+      existingSelect.innerHTML = `<option value="">-- No matching existing patients found --</option>`;
+      emptyNotice.style.display = 'block';
+      return;
+    }
+
+    emptyNotice.style.display = 'none';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = `-- Select an existing patient (${uniqueCandidates.length} available) --`;
+    existingSelect.appendChild(defaultOpt);
+
+    for (const patient of uniqueCandidates) {
+      const opt = document.createElement('option');
+      opt.value = patient.id;
+      // Privacy-conscious format: Name (IC: ••••-••-1234, ID: rec-...)
+      opt.textContent = `${patient.name} (${maskIC(patient.icNumber)})`;
+      if (this.currentRecord && this.currentRecord.id === patient.id) {
+        opt.selected = true;
+      }
+      existingSelect.appendChild(opt);
+    }
+  }
+
+          applySelectedExistingPatient(patient               )       {
+    this.currentRecord = patient;
+
+    const nameInput = this.overlayEl.querySelector('#field-name')                    ;
+    const icInput = this.overlayEl.querySelector('#field-ic')                    ;
+    const phoneInput = this.overlayEl.querySelector('#field-phone')                    ;
+    const tcaInput = this.overlayEl.querySelector('#field-tca')                    ;
+    const bloodInput = this.overlayEl.querySelector('#field-blood-date')                    ;
+    const otherInput = this.overlayEl.querySelector('#field-blood-other')                    ;
+    const planInput = this.overlayEl.querySelector('#field-plan')                       ;
+
+    nameInput.value = patient.name;
+    icInput.value = patient.icNumber;
+    phoneInput.value = patient.phone || '';
+    tcaInput.value = patient.nextTca || '';
+    bloodInput.value = patient.bloodInvestigationDate || '';
+    otherInput.value = patient.bloodOther || '';
+    planInput.value = patient.plan || '';
+
+    this.isBloodDateManuallyEdited = Boolean(patient.bloodInvestigationDate);
+    this.setSelectedInvestigations(patient.bloodInvestigations || []);
+
+    // Show selection banner
+    const banner = this.overlayEl.querySelector('#existing-selected-banner')               ;
+    const nameSpan = this.overlayEl.querySelector('#existing-selected-name')               ;
+    const metaSpan = this.overlayEl.querySelector('#existing-selected-meta')               ;
+
+    nameSpan.textContent = patient.name;
+    metaSpan.textContent = `(${maskIC(patient.icNumber)} • ID: ${patient.id})`;
+    banner.style.display = 'flex';
+
+    // Clear validation errors
+    (this.overlayEl.querySelector('#error-name')               ).style.display = 'none';
+    (this.overlayEl.querySelector('#error-ic')               ).style.display = 'none';
+  }
+
+          clearSelectedExistingPatient()       {
+    this.currentRecord = null;
+
+    const nameInput = this.overlayEl.querySelector('#field-name')                    ;
+    const icInput = this.overlayEl.querySelector('#field-ic')                    ;
+    const phoneInput = this.overlayEl.querySelector('#field-phone')                    ;
+    const tcaInput = this.overlayEl.querySelector('#field-tca')                    ;
+    const bloodInput = this.overlayEl.querySelector('#field-blood-date')                    ;
+    const otherInput = this.overlayEl.querySelector('#field-blood-other')                    ;
+    const planInput = this.overlayEl.querySelector('#field-plan')                       ;
+
+    nameInput.value = '';
+    icInput.value = '';
+    phoneInput.value = '';
+    tcaInput.value = '';
+    bloodInput.value = '';
+    otherInput.value = '';
+    planInput.value = '';
+
+    this.isBloodDateManuallyEdited = false;
+    this.setSelectedInvestigations([]);
+
+    const banner = this.overlayEl.querySelector('#existing-selected-banner')               ;
+    banner.style.display = 'none';
+  }
+
           setPatientCategoryUI(type             )       {
     const typeInput = this.overlayEl.querySelector('#field-patient-type')                    ;
     typeInput.value = type;
@@ -2486,11 +2745,6 @@ class RecordModal {
     });
 
     otherContainer.style.display = set.has('Other') ? 'flex' : 'none';
-  }
-
-          getPatientTypeValue()              {
-    const typeInput = this.overlayEl.querySelector('#field-patient-type')                    ;
-    return (typeInput.value               ) || 'Existing';
   }
 
           validateBloodDate()          {
@@ -2569,8 +2823,9 @@ class RecordModal {
     const trimmedIc = icInput.value.trim();
     const normalizedNewIc = normalizeCode(trimmedIc);
 
-    // Duplicate IC check when saving a new patient
-    if (!this.isEditMode) {
+    // Duplicate IC check when saving a new patient (unless updating selected existing patient)
+    const isNew = !this.currentRecord;
+    if (isNew) {
       const existingMatch = this.savedRecords.find(
         r => normalizeCode(r.icNumber) === normalizedNewIc
       );
@@ -2616,7 +2871,7 @@ class RecordModal {
       this.close();
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Patient';
+      saveBtn.textContent = this.isEditMode ? 'Save Changes' : 'Save Patient';
     }
   }
 
@@ -2631,8 +2886,10 @@ class RecordModal {
     this.isEditMode = Boolean(record);
     this.onSaveCallback = onSave;
     this.previousActiveElement = triggerEl || (document.activeElement               );
+    this.existingSearchQuery = '';
 
     const titleEl = this.overlayEl.querySelector('#form-modal-title')               ;
+    const saveBtn = this.overlayEl.querySelector('#btn-save-record')                     ;
     const nameInput = this.overlayEl.querySelector('#field-name')                    ;
     const icInput = this.overlayEl.querySelector('#field-ic')                    ;
     const phoneInput = this.overlayEl.querySelector('#field-phone')                    ;
@@ -2641,6 +2898,8 @@ class RecordModal {
     const bloodInput = this.overlayEl.querySelector('#field-blood-date')                    ;
     const otherInput = this.overlayEl.querySelector('#field-blood-other')                    ;
     const planInput = this.overlayEl.querySelector('#field-plan')                       ;
+    const existingSearch = this.overlayEl.querySelector('#filter-existing-patients')                    ;
+    existingSearch.value = '';
 
     const errorName = this.overlayEl.querySelector('#error-name')               ;
     const errorIc = this.overlayEl.querySelector('#error-ic')               ;
@@ -2652,7 +2911,9 @@ class RecordModal {
     errorOther.style.display = 'none';
 
     if (record) {
-      titleEl.textContent = 'Edit Patient Record';
+      // Edit Mode
+      titleEl.textContent = 'Edit Patient Details';
+      saveBtn.textContent = 'Save Changes';
       nameInput.value = record.name;
       icInput.value = record.icNumber;
       phoneInput.value = record.phone || '';
@@ -2663,8 +2924,11 @@ class RecordModal {
       planInput.value = record.plan || '';
       this.isBloodDateManuallyEdited = Boolean(record.bloodInvestigationDate);
       this.setSelectedInvestigations(record.bloodInvestigations || []);
+      this.showExistingPicker(false);
     } else {
-      titleEl.textContent = 'New Patient Registration';
+      // Add Mode: heading is "Add Patient" (Requirement 3)
+      titleEl.textContent = 'Add Patient';
+      saveBtn.textContent = 'Save Patient';
       nameInput.value = '';
       icInput.value = '';
       phoneInput.value = '';
@@ -2675,6 +2939,10 @@ class RecordModal {
       planInput.value = '';
       this.isBloodDateManuallyEdited = false;
       this.setSelectedInvestigations([]);
+
+      // In Add Mode with Existing category active, show dynamic existing picker (Requirement 1)
+      this.showExistingPicker(true);
+      (this.overlayEl.querySelector('#existing-selected-banner')               ).style.display = 'none';
     }
 
     this.setPatientCategoryUI((typeInput.value               ) || 'Existing');
@@ -2683,7 +2951,12 @@ class RecordModal {
     this.overlayEl.classList.add('is-open');
 
     window.setTimeout(() => {
-      nameInput.focus();
+      if (!record && typeInput.value === 'Existing') {
+        const existingSelect = this.overlayEl.querySelector('#select-existing-patient')               ;
+        existingSelect.focus();
+      } else {
+        nameInput.focus();
+      }
     }, 100);
   }
 
@@ -3848,30 +4121,33 @@ class NavigationBar {
 
           createMobileBar()       {
     this.mobileNavEl = document.createElement('nav');
-    this.mobileNavEl.className = 'bottom-tab-bar';
+    this.mobileNavEl.className = 'bottom-tab-bar ios-tab-bar';
     this.mobileNavEl.setAttribute('role', 'tablist');
     this.mobileNavEl.setAttribute('aria-label', 'Main Navigation');
 
     this.mobileNavEl.innerHTML = `
       <button type="button" class="tab-item ${this.activeTab === 'records' ? 'is-active' : ''}" data-tab="records" role="tab" aria-selected="${this.activeTab === 'records'}">
-        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="8" y1="6" x2="21" y2="6"></line>
-          <line x1="8" y1="12" x2="21" y2="12"></line>
-          <line x1="8" y1="18" x2="21" y2="18"></line>
-          <line x1="3" y1="6" x2="3.01" y2="6"></line>
-          <line x1="3" y1="12" x2="3.01" y2="12"></line>
-          <line x1="3" y1="18" x2="3.01" y2="18"></line>
-        </svg>
+        <div class="tab-icon-wrapper">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="3" width="16" height="18" rx="2" ry="2"></rect>
+            <line x1="8" y1="8" x2="16" y2="8"></line>
+            <line x1="8" y1="12" x2="16" y2="12"></line>
+            <line x1="8" y1="16" x2="12" y2="16"></line>
+          </svg>
+        </div>
         <span class="tab-label">Records</span>
       </button>
 
       <button type="button" class="tab-item ${this.activeTab === 'tca' ? 'is-active' : ''}" data-tab="tca" role="tab" aria-selected="${this.activeTab === 'tca'}">
-        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-          <line x1="16" y1="2" x2="16" y2="6"></line>
-          <line x1="8" y1="2" x2="8" y2="6"></line>
-          <line x1="3" y1="10" x2="21" y2="10"></line>
-        </svg>
+        <div class="tab-icon-wrapper">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2.5"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+            <circle cx="12" cy="15" r="1.5"></circle>
+          </svg>
+        </div>
         <span class="tab-label">TCA</span>
       </button>
     `;
@@ -4104,11 +4380,11 @@ function createTCARow(record               , onClick            )              {
                                                      
 function createHeader(callbacks                 )              {
   const header = document.createElement('header');
-  header.className = 'app-header';
+  header.className = 'app-header ios-header';
 
   function getThemeIcon(mode           )         {
     if (mode === 'light') {
-      return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="5"></circle>
         <line x1="12" y1="1" x2="12" y2="3"></line>
         <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -4121,11 +4397,11 @@ function createHeader(callbacks                 )              {
       </svg>`;
     }
     if (mode === 'dark') {
-      return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
       </svg>`;
     }
-    return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
       <line x1="8" y1="21" x2="16" y2="21"></line>
       <line x1="12" y1="17" x2="12" y2="21"></line>
@@ -4135,8 +4411,10 @@ function createHeader(callbacks                 )              {
   header.innerHTML = `
     <div class="header-inner">
       <div class="brand-group">
-        <h1 class="app-title">ARV KKBK</h1>
-        <span class="brand-badge">Personal</span>
+        <div class="brand-title-wrap">
+          <h1 class="app-title">ARV KKBK</h1>
+          <span class="brand-badge">Personal</span>
+        </div>
 
         <!-- Desktop Segmented Navigation (>= 900px) -->
         <div class="desktop-nav-tabs" id="header-desktop-tabs" role="tablist" aria-label="Desktop Views">
@@ -4150,12 +4428,12 @@ function createHeader(callbacks                 )              {
       </div>
 
       <div class="header-actions">
-        <button type="button" class="btn-icon" id="btn-theme-toggle" aria-label="Toggle theme mode" title="Current: ${themeManager.getMode()}">
+        <button type="button" class="btn-icon header-icon-btn" id="btn-theme-toggle" aria-label="Toggle theme mode" title="Current: ${themeManager.getMode()}">
           ${getThemeIcon(themeManager.getMode())}
         </button>
 
-        <button type="button" class="btn-pill" id="btn-open-data" aria-label="Open data backup and restore">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button type="button" class="btn-pill header-pill-btn" id="btn-open-data" aria-label="Open data backup and restore">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -4163,12 +4441,12 @@ function createHeader(callbacks                 )              {
           <span>Data</span>
         </button>
 
-        <button type="button" class="btn-pill btn-desktop-add" id="btn-header-add" aria-label="Add new record">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <button type="button" class="btn-pill btn-desktop-add" id="btn-header-add" aria-label="Add Patient">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          <span>Add Record</span>
+          <span>Add Patient</span>
         </button>
       </div>
     </div>
@@ -4226,6 +4504,7 @@ class App {
           searchInputEl                   ;
           searchClearBtn                    ;
           segmentedFilterEl              ;
+          summaryStripEl              ;
 
   constructor() {
     // 1. Initial theme setup
@@ -4284,6 +4563,9 @@ class App {
     mainEl.className = 'main-content';
 
     mainEl.innerHTML = `
+      <!-- Apple App Store-Inspired Clinic Summary Overview -->
+      <section id="summary-metrics-strip" class="ios-summary-grid"></section>
+
       <section class="toolbar-section">
         <div class="search-wrapper">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -4331,11 +4613,11 @@ class App {
 
     appEl.appendChild(mainEl);
 
-    // Floating Action Button (Mobile) - opens Add Record from either tab
+    // Floating Action Button (Mobile) - opens Add Patient from either tab
     const fabBtn = document.createElement('button');
     fabBtn.type = 'button';
     fabBtn.className = 'fab-add';
-    fabBtn.setAttribute('aria-label', 'Add Record');
+    fabBtn.setAttribute('aria-label', 'Add Patient');
     fabBtn.innerHTML = `
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -4354,6 +4636,7 @@ class App {
     this.searchInputEl = mainEl.querySelector('#search-input') ;
     this.searchClearBtn = mainEl.querySelector('#search-clear-btn') ;
     this.segmentedFilterEl = mainEl.querySelector('#patient-type-filter') ;
+    this.summaryStripEl = mainEl.querySelector('#summary-metrics-strip') ;
 
     this.bindToolbarEvents();
     this.updateSortTriggerLabel();
@@ -4427,6 +4710,9 @@ class App {
 
           renderCurrentView()       {
     const isTcaTab = this.activeTab === 'tca';
+
+    // Update Apple-style summary metrics
+    this.updateSummaryMetrics();
 
     // Requirement 2: REMOVE the All / New / Existing filter from the TCA tab only.
     if (isTcaTab) {
@@ -4592,6 +4878,54 @@ class App {
     this.renderCurrentView();
   }
 
+          updateSummaryMetrics()       {
+    if (!this.summaryStripEl) return;
+
+    if (this.records.length === 0) {
+      this.summaryStripEl.style.display = 'none';
+      return;
+    }
+
+    this.summaryStripEl.style.display = 'grid';
+
+    const totalActive = this.records.filter(r => r.isActive !== false).length;
+    let overdueCount = 0;
+    let upcomingWeekCount = 0;
+    let bloodDueCount = 0;
+
+    for (const r of this.records) {
+      if (r.isActive === false) continue;
+      if (r.nextTca) {
+        const diff = getDaysDifference(r.nextTca);
+        if (diff < 0) overdueCount++;
+        else if (diff <= 7) upcomingWeekCount++;
+      }
+      if (r.bloodInvestigationDate) {
+        const bDiff = getDaysDifference(r.bloodInvestigationDate);
+        if (bDiff <= 7) bloodDueCount++;
+      }
+    }
+
+    this.summaryStripEl.innerHTML = `
+      <div class="ios-summary-card">
+        <span class="ios-summary-val color-accent">${totalActive}</span>
+        <span class="ios-summary-lbl">Active Patients</span>
+      </div>
+      <div class="ios-summary-card">
+        <span class="ios-summary-val ${overdueCount > 0 ? 'color-overdue' : ''}">${overdueCount}</span>
+        <span class="ios-summary-lbl">Overdue TCA</span>
+      </div>
+      <div class="ios-summary-card">
+        <span class="ios-summary-val color-upcoming">${upcomingWeekCount}</span>
+        <span class="ios-summary-lbl">TCA This Week</span>
+      </div>
+      <div class="ios-summary-card">
+        <span class="ios-summary-val">${bloodDueCount}</span>
+        <span class="ios-summary-lbl">Blood Due</span>
+      </div>
+    `;
+  }
+
           async handleDeleteRecord(record               )                {
     const aptCount = Array.isArray(record.appointments) ? record.appointments.length : (record.nextTca ? 1 : 0);
     const hasHistory = aptCount > 0 || (record.bloodInvestigations && record.bloodInvestigations.length > 0);
@@ -4599,7 +4933,7 @@ class App {
     if (hasHistory) {
       const choice = await confirmSheet.show({
         title: 'Delete Patient Medical Record?',
-        message: `⚠️ Patient "${record.name}" has ${aptCount} appointment(s) and clinical investigation records in their history. Deleting will permanently remove all medical history.\n\nWe recommend deactivating the patient record instead to safely preserve medical records.`,
+        message: `Patient "${record.name}" has ${aptCount} appointment(s) and clinical investigation records in their history. Deleting will permanently remove all medical history.\n\nWe recommend deactivating the patient record instead to safely preserve medical records.`,
         confirmLabel: 'Deactivate Instead',
         cancelLabel: 'Delete Permanently',
         isDestructive: false

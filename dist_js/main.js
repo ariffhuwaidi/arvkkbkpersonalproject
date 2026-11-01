@@ -3,6 +3,7 @@ import { themeManager } from './utils/theme.js';
 import { getSavedSort, saveSortPreference, sortRecords, SORT_OPTIONS } from './utils/sort.js';
 import { filterRecords } from './utils/search.js';
 import { generateDemoRecords } from './utils/demo-data.js';
+import { isDatePast, getDaysDifference } from './utils/date.js';
 
 import { createHeader } from './components/header.js';
 import { createRecordCard, RecordCardActions } from './components/record-card.js';
@@ -36,6 +37,7 @@ class App {
           searchInputEl                   ;
           searchClearBtn                    ;
           segmentedFilterEl              ;
+          summaryStripEl              ;
 
   constructor() {
     // 1. Initial theme setup
@@ -94,6 +96,9 @@ class App {
     mainEl.className = 'main-content';
 
     mainEl.innerHTML = `
+      <!-- Apple App Store-Inspired Clinic Summary Overview -->
+      <section id="summary-metrics-strip" class="ios-summary-grid"></section>
+
       <section class="toolbar-section">
         <div class="search-wrapper">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -141,11 +146,11 @@ class App {
 
     appEl.appendChild(mainEl);
 
-    // Floating Action Button (Mobile) - opens Add Record from either tab
+    // Floating Action Button (Mobile) - opens Add Patient from either tab
     const fabBtn = document.createElement('button');
     fabBtn.type = 'button';
     fabBtn.className = 'fab-add';
-    fabBtn.setAttribute('aria-label', 'Add Record');
+    fabBtn.setAttribute('aria-label', 'Add Patient');
     fabBtn.innerHTML = `
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -164,6 +169,7 @@ class App {
     this.searchInputEl = mainEl.querySelector('#search-input') ;
     this.searchClearBtn = mainEl.querySelector('#search-clear-btn') ;
     this.segmentedFilterEl = mainEl.querySelector('#patient-type-filter') ;
+    this.summaryStripEl = mainEl.querySelector('#summary-metrics-strip') ;
 
     this.bindToolbarEvents();
     this.updateSortTriggerLabel();
@@ -237,6 +243,9 @@ class App {
 
           renderCurrentView()       {
     const isTcaTab = this.activeTab === 'tca';
+
+    // Update Apple-style summary metrics
+    this.updateSummaryMetrics();
 
     // Requirement 2: REMOVE the All / New / Existing filter from the TCA tab only.
     if (isTcaTab) {
@@ -402,6 +411,54 @@ class App {
     this.renderCurrentView();
   }
 
+          updateSummaryMetrics()       {
+    if (!this.summaryStripEl) return;
+
+    if (this.records.length === 0) {
+      this.summaryStripEl.style.display = 'none';
+      return;
+    }
+
+    this.summaryStripEl.style.display = 'grid';
+
+    const totalActive = this.records.filter(r => r.isActive !== false).length;
+    let overdueCount = 0;
+    let upcomingWeekCount = 0;
+    let bloodDueCount = 0;
+
+    for (const r of this.records) {
+      if (r.isActive === false) continue;
+      if (r.nextTca) {
+        const diff = getDaysDifference(r.nextTca);
+        if (diff < 0) overdueCount++;
+        else if (diff <= 7) upcomingWeekCount++;
+      }
+      if (r.bloodInvestigationDate) {
+        const bDiff = getDaysDifference(r.bloodInvestigationDate);
+        if (bDiff <= 7) bloodDueCount++;
+      }
+    }
+
+    this.summaryStripEl.innerHTML = `
+      <div class="ios-summary-card">
+        <span class="ios-summary-val color-accent">${totalActive}</span>
+        <span class="ios-summary-lbl">Active Patients</span>
+      </div>
+      <div class="ios-summary-card">
+        <span class="ios-summary-val ${overdueCount > 0 ? 'color-overdue' : ''}">${overdueCount}</span>
+        <span class="ios-summary-lbl">Overdue TCA</span>
+      </div>
+      <div class="ios-summary-card">
+        <span class="ios-summary-val color-upcoming">${upcomingWeekCount}</span>
+        <span class="ios-summary-lbl">TCA This Week</span>
+      </div>
+      <div class="ios-summary-card">
+        <span class="ios-summary-val">${bloodDueCount}</span>
+        <span class="ios-summary-lbl">Blood Due</span>
+      </div>
+    `;
+  }
+
           async handleDeleteRecord(record               )                {
     const aptCount = Array.isArray(record.appointments) ? record.appointments.length : (record.nextTca ? 1 : 0);
     const hasHistory = aptCount > 0 || (record.bloodInvestigations && record.bloodInvestigations.length > 0);
@@ -409,7 +466,7 @@ class App {
     if (hasHistory) {
       const choice = await confirmSheet.show({
         title: 'Delete Patient Medical Record?',
-        message: `⚠️ Patient "${record.name}" has ${aptCount} appointment(s) and clinical investigation records in their history. Deleting will permanently remove all medical history.\n\nWe recommend deactivating the patient record instead to safely preserve medical records.`,
+        message: `Patient "${record.name}" has ${aptCount} appointment(s) and clinical investigation records in their history. Deleting will permanently remove all medical history.\n\nWe recommend deactivating the patient record instead to safely preserve medical records.`,
         confirmLabel: 'Deactivate Instead',
         cancelLabel: 'Delete Permanently',
         isDestructive: false

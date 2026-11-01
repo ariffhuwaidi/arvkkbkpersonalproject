@@ -2,7 +2,7 @@ import type { PatientRecord, PatientType } from '../types';
 import { getTCAStatus, formatDisplayDate, isDatePast } from '../utils/date';
 
 function escapeHTML(str: string): string {
-  return str
+  return (str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -53,8 +53,8 @@ export function createRecordCard(
   // Patient category subtle label
   const isNew = record.patientType === 'New';
   const patientTypeLabel = isNew
-    ? `<span class="patient-type-tag type-new">• New Patient</span>`
-    : `<span class="patient-type-tag type-existing">• Existing Patient</span>`;
+    ? `<span class="patient-type-tag type-new">New Patient</span>`
+    : `<span class="patient-type-tag type-existing">Existing Patient</span>`;
 
   // Deactivated status tag
   const inactiveBadge = record.isActive === false
@@ -63,7 +63,7 @@ export function createRecordCard(
 
   const phoneHtml = record.phone
     ? `<div class="meta-item">
-        <svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="meta-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
         </svg>
         <span>${escapeHTML(record.phone)}</span>
@@ -133,9 +133,9 @@ export function createRecordCard(
         ${tcaBadgeHtml}
         <button type="button" class="btn-card-menu" aria-label="Patient actions" title="Patient Actions" aria-haspopup="true">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="1"></circle>
-            <circle cx="19" cy="12" r="1"></circle>
-            <circle cx="5" cy="12" r="1"></circle>
+            <circle cx="12" cy="12" r="1.5"></circle>
+            <circle cx="19" cy="12" r="1.5"></circle>
+            <circle cx="5" cy="12" r="1.5"></circle>
           </svg>
         </button>
       </div>
@@ -147,7 +147,7 @@ export function createRecordCard(
 
     <div class="card-meta-row">
       <div class="meta-item">
-        <svg class="meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="meta-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="4" width="18" height="16" rx="2"></rect>
           <line x1="7" y1="8" x2="17" y2="8"></line>
           <line x1="7" y1="12" x2="13" y2="12"></line>
@@ -159,7 +159,7 @@ export function createRecordCard(
 
     ${planPreviewHtml}
 
-    <div class="card-direct-actions" style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 0.5px solid var(--color-separator);">
+    <div class="card-direct-actions">
       <button type="button" class="card-action-btn btn-action-view" data-card-action="view">View</button>
       <button type="button" class="card-action-btn btn-action-edit" data-card-action="edit">Edit</button>
       <button type="button" class="card-action-btn btn-action-deactivate" data-card-action="toggle-active">
@@ -208,6 +208,7 @@ export function createRecordCard(
 
 /**
  * Creates and shows an action dropdown anchored to the card menu button
+ * Completely free of emojis, uses minimalist SVG line icons and Apple-style menu styling.
  */
 function openCardDropdownMenu(
   triggerBtn: HTMLElement,
@@ -223,15 +224,15 @@ function openCardDropdownMenu(
   overlay.style.backgroundColor = 'transparent';
 
   const menu = document.createElement('div');
-  menu.className = 'sort-dropdown-menu is-anchored';
-  menu.style.width = '220px';
+  menu.className = 'sort-dropdown-menu is-anchored ios-action-menu';
+  menu.style.width = '210px';
 
   const rect = triggerBtn.getBoundingClientRect();
-  let left = rect.right - 220;
+  let left = rect.right - 210;
   if (left < 10) left = 10;
-  let top = rect.bottom + 4;
-  if (top + 240 > window.innerHeight && rect.top > 250) {
-    top = Math.max(10, rect.top - 240);
+  let top = rect.bottom + 6;
+  if (top + 230 > window.innerHeight && rect.top > 240) {
+    top = Math.max(10, rect.top - 230);
   }
 
   menu.style.position = 'fixed';
@@ -241,27 +242,54 @@ function openCardDropdownMenu(
   menu.style.bottom = 'auto';
 
   const isNew = record.patientType === 'New';
-  const switchCategoryText = isNew ? 'Switch to Existing Patient' : 'Switch to New Patient';
   const newCategoryTarget: PatientType = isNew ? 'Existing' : 'New';
-
   const isCurrentlyActive = record.isActive !== false;
 
   menu.innerHTML = `
-    <div style="display: flex; flex-direction: column; padding: 4px;">
-      <button type="button" class="sort-dropdown-item" data-menu-action="view">
-        <span>👁 View Profile</span>
+    <div class="ios-menu-group" role="menu">
+      <button type="button" class="ios-menu-item" data-menu-action="view" role="menuitem">
+        <svg class="ios-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        <span>View Profile</span>
       </button>
-      <button type="button" class="sort-dropdown-item" data-menu-action="edit">
-        <span>✎ Edit Patient Details</span>
+
+      <button type="button" class="ios-menu-item" data-menu-action="edit" role="menuitem">
+        <svg class="ios-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+        <span>Edit Patient</span>
       </button>
-      <button type="button" class="sort-dropdown-item" data-menu-action="category">
-        <span>🏷 ${switchCategoryText}</span>
+
+      <button type="button" class="ios-menu-item" data-menu-action="category" role="menuitem">
+        <svg class="ios-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+          <line x1="7" y1="7" x2="7.01" y2="7"></line>
+        </svg>
+        <span>Change Category</span>
       </button>
-      <button type="button" class="sort-dropdown-item" data-menu-action="toggle-active">
-        <span>${isCurrentlyActive ? '🚫 Deactivate Patient' : '✓ Reactivate Patient'}</span>
+
+      <button type="button" class="ios-menu-item" data-menu-action="toggle-active" role="menuitem">
+        <svg class="ios-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          ${isCurrentlyActive
+            ? '<circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>'
+            : '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>'}
+        </svg>
+        <span>${isCurrentlyActive ? 'Deactivate Patient' : 'Reactivate Patient'}</span>
       </button>
-      <button type="button" class="sort-dropdown-item" data-menu-action="delete" style="color: var(--color-destructive);">
-        <span>🗑 Delete Patient Record</span>
+
+      <div class="ios-menu-separator"></div>
+
+      <button type="button" class="ios-menu-item is-destructive" data-menu-action="delete" role="menuitem">
+        <svg class="ios-menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+        <span>Delete Patient</span>
       </button>
     </div>
   `;
