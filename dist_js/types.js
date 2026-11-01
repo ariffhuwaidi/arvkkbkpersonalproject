@@ -1,8 +1,28 @@
                                              
+                                          
 
                                                            
 
                                           
+
+                                                                                               
+
+                                 
+                                                     
+                    
+                                            
+                            
+                 
+                
+                                  
+                                
+                      
+                                      
+                                        
+                      
+                    
+                    
+ 
 
 export const BLOOD_INVESTIGATION_OPTIONS = [
   'VL',
@@ -20,16 +40,21 @@ export const BLOOD_INVESTIGATION_OPTIONS = [
                                                                                   
 
                                 
-             
+                                  
                
                    
                  
-                           
+                                                                   
+                                                                          
+                                                                  
+
+                                                                                           
                                              
                                                             
                                                                                
                                                              
                                                  
+
                     
                     
  

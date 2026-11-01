@@ -1,8 +1,28 @@
 export type PatientType = 'New' | 'Existing';
+export type PatientCategory = PatientType;
 
 export type PatientTypeFilter = 'all' | 'New' | 'Existing';
 
 export type ActiveTab = 'records' | 'tca';
+
+export type AppointmentStatus = 'Scheduled' | 'Attended' | 'DNA' | 'Rescheduled' | 'Cancelled';
+
+export interface TCAAppointment {
+  id: string; // Unique appointment ID (e.g. apt_...)
+  patientId: string;
+  tcaDate: string; // ISO format: YYYY-MM-DD
+  status: AppointmentStatus;
+  notes?: string;
+  plan?: string;
+  bloodInvestigationDate?: string;
+  bloodInvestigations: string[];
+  bloodOther?: string;
+  rescheduledToAppointmentId?: string;
+  rescheduledFromAppointmentId?: string;
+  attendedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export const BLOOD_INVESTIGATION_OPTIONS = [
   'VL',
@@ -20,16 +40,21 @@ export const BLOOD_INVESTIGATION_OPTIONS = [
 export type BloodInvestigationOption = typeof BLOOD_INVESTIGATION_OPTIONS[number];
 
 export interface PatientRecord {
-  id: string;
+  id: string; // Unique Patient ID
   name: string;
   icNumber: string;
   phone?: string;
-  patientType: PatientType;
+  patientType: PatientType; // Patient Category: 'New' | 'Existing'
+  isActive?: boolean; // Active or Deactivated/Inactive (defaults to true)
+  appointments?: TCAAppointment[]; // Complete appointment history
+
+  // Denormalized/helper fields pointing to current/next active appointment for list/search
   nextTca?: string; // ISO format: YYYY-MM-DD
   bloodInvestigationDate?: string; // ISO format: YYYY-MM-DD
   bloodInvestigations: string[]; // Fixed keys from BLOOD_INVESTIGATION_OPTIONS
   bloodOther?: string; // Specified text if 'Other' is ticked
   plan?: string; // Optional multi-line free text
+
   createdAt: string;
   updatedAt: string;
 }

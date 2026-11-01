@@ -3,10 +3,30 @@
 
   // --- Module: types ---
                                              
+                                          
 
                                                            
 
                                           
+
+                                                                                               
+
+                                 
+                                                     
+                    
+                                            
+                            
+                 
+                
+                                  
+                                
+                      
+                                      
+                                        
+                      
+                    
+                    
+ 
 
 const BLOOD_INVESTIGATION_OPTIONS = [
   'VL',
@@ -24,16 +44,21 @@ const BLOOD_INVESTIGATION_OPTIONS = [
                                                                                   
 
                                 
-             
+                                  
                
                    
                  
-                           
+                                                                   
+                                                                          
+                                                                  
+
+                                                                                           
                                              
                                                             
                                                                                
                                                              
                                                  
+
                     
                     
  
@@ -619,7 +644,7 @@ function sortRecords(records                 , sort           )                 
 
 
   // --- Module: utils/demo-data ---
-                                              
+                                                              
 function getOffsetDateISO(daysOffset        )         {
   const d = new Date();
   d.setDate(d.getDate() + daysOffset);
@@ -630,18 +655,140 @@ function getOffsetDateISO(daysOffset        )         {
 }
 
 /**
- * Generates an explicitly fictional demo dataset.
- * - Realistic mix of New and Existing patients.
- * - Varied blood investigation chip selections (including 'Other').
- * - Separate multi-line clinical plans.
+ * Generates an explicitly fictional demo dataset showcasing:
+ * - Patient Category: New Patient & Existing Patient.
+ * - Active & Deactivated records.
+ * - Multiple TCA appointments per patient (Upcoming Scheduled + TCA History: Attended, DNA, Rescheduled).
+ * - Preserved blood investigations and follow-up plans.
  */
 function generateDemoRecords()                  {
   const now = new Date().toISOString();
 
+  const pastApt1 = getOffsetDateISO(-90); // 3 months ago (Attended)
+  const pastApt2 = getOffsetDateISO(-30); // 1 month ago (Attended)
+  const pastAptDna = getOffsetDateISO(-14); // 2 weeks ago (DNA)
   const overdueTca = getOffsetDateISO(-3); // Overdue by 3 days
   const todayTca = getOffsetDateISO(0);    // Today
   const soonTca = getOffsetDateISO(4);     // In 4 days (This week)
   const laterTca = getOffsetDateISO(35);   // Later next month
+
+  // Patient 1: Overdue scheduled TCA + 1 Attended historical TCA
+  const p1Apts                   = [
+    {
+      id: 'apt-001-hist1',
+      patientId: 'demo-rec-001',
+      tcaDate: pastApt1,
+      status: 'Attended',
+      attendedAt: new Date(Date.now() - 90 * 86400000).toISOString(),
+      notes: 'Attended on time. Dispensed 2-month TLD supply.',
+      plan: 'Stable on TLD regimen. Repeat FBC, Renal Profile, and LFT next visit.',
+      bloodInvestigationDate: getOneMonthBeforeISO(pastApt1),
+      bloodInvestigations: ['VL', 'CD4', 'FBC', 'RP'],
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: 'apt-001-curr',
+      patientId: 'demo-rec-001',
+      tcaDate: overdueTca,
+      status: 'Scheduled',
+      notes: 'Patient overdue for follow-up review',
+      plan: 'Repeat viral load check and renal profile. Assess adherence.',
+      bloodInvestigationDate: getOneMonthBeforeISO(overdueTca),
+      bloodInvestigations: ['VL', 'CD4', 'FBC', 'RP'],
+      createdAt: now,
+      updatedAt: now
+    }
+  ];
+
+  // Patient 2: New Patient, Scheduled TCA for today + 1 DNA visit
+  const p2Apts                   = [
+    {
+      id: 'apt-002-dna',
+      patientId: 'demo-rec-002',
+      tcaDate: pastAptDna,
+      status: 'DNA',
+      notes: 'Patient did not attend appointment. Traced via phone.',
+      plan: 'Reschedule urgently for adherence counseling session.',
+      bloodInvestigationDate: getOneMonthBeforeISO(pastAptDna),
+      bloodInvestigations: ['VL', 'FBS'],
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: 'apt-002-today',
+      patientId: 'demo-rec-002',
+      tcaDate: todayTca,
+      status: 'Scheduled',
+      notes: 'Follow-up after DNA. Fasting for FBS & FLP.',
+      plan: 'Adherence counseling session scheduled. Fasting lipid profile (FLP) & FBS review.',
+      bloodInvestigationDate: getOneMonthBeforeISO(todayTca),
+      bloodInvestigations: ['VL', 'FBS', 'FLP'],
+      createdAt: now,
+      updatedAt: now
+    }
+  ];
+
+  // Patient 3: Existing Patient with Rescheduled appointment history
+  const p3Apts                   = [
+    {
+      id: 'apt-003-old',
+      patientId: 'demo-rec-003',
+      tcaDate: getOffsetDateISO(-5),
+      status: 'Rescheduled',
+      rescheduledToAppointmentId: 'apt-003-new',
+      notes: 'Patient called to request postponement due to work outstation.',
+      plan: 'CD4 count 650 cells/uL, Viral Load undetectable. Dispense 3-month antiretroviral supply.',
+      bloodInvestigationDate: getOneMonthBeforeISO(getOffsetDateISO(-5)),
+      bloodInvestigations: ['VL', 'CD4', 'Other'],
+      bloodOther: 'TFT & urine protein',
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: 'apt-003-new',
+      patientId: 'demo-rec-003',
+      tcaDate: soonTca,
+      status: 'Scheduled',
+      rescheduledFromAppointmentId: 'apt-003-old',
+      notes: 'Rescheduled from last week.',
+      plan: 'CD4 count 650 cells/uL, Viral Load undetectable. Dispense 3-month antiretroviral supply.',
+      bloodInvestigationDate: getOneMonthBeforeISO(soonTca),
+      bloodInvestigations: ['VL', 'CD4', 'Other'],
+      bloodOther: 'TFT & urine protein',
+      createdAt: now,
+      updatedAt: now
+    }
+  ];
+
+  // Patient 4: Existing Patient with 1 upcoming TCA + 1 Attended
+  const p4Apts                   = [
+    {
+      id: 'apt-004-att',
+      patientId: 'demo-rec-004',
+      tcaDate: pastApt2,
+      status: 'Attended',
+      attendedAt: new Date(Date.now() - 30 * 86400000).toISOString(),
+      notes: 'Routine visit completed.',
+      plan: 'Annual biochemical surveillance. Hep B sAg non-reactive, anti-HCV negative.',
+      bloodInvestigationDate: getOneMonthBeforeISO(pastApt2),
+      bloodInvestigations: ['LFT', 'AST', 'RP'],
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: 'apt-004-later',
+      patientId: 'demo-rec-004',
+      tcaDate: laterTca,
+      status: 'Scheduled',
+      notes: 'Routine 6-month check.',
+      plan: 'Annual biochemical surveillance. Hep B sAg non-reactive, anti-HCV negative.',
+      bloodInvestigationDate: getOneMonthBeforeISO(laterTca),
+      bloodInvestigations: ['LFT', 'AST', 'RP'],
+      createdAt: now,
+      updatedAt: now
+    }
+  ];
 
   return [
     {
@@ -650,11 +797,13 @@ function generateDemoRecords()                  {
       icNumber: '000101-00-0001',
       phone: '012-0000001',
       patientType: 'Existing',
+      isActive: true,
+      appointments: p1Apts,
       nextTca: overdueTca,
-      bloodInvestigationDate: getOneMonthBeforeISO(overdueTca), // Past blood date
+      bloodInvestigationDate: getOneMonthBeforeISO(overdueTca),
       bloodInvestigations: ['VL', 'CD4', 'FBC', 'RP'],
       bloodOther: undefined,
-      plan: 'Stable on TLD regimen. Repeat FBC, Renal Profile, and LFT in 6 months.',
+      plan: 'Repeat viral load check and renal profile. Assess adherence.',
       createdAt: now,
       updatedAt: now
     },
@@ -664,6 +813,8 @@ function generateDemoRecords()                  {
       icNumber: '000202-00-0002',
       phone: '019-0000002',
       patientType: 'New',
+      isActive: true,
+      appointments: p2Apts,
       nextTca: todayTca,
       bloodInvestigationDate: getOneMonthBeforeISO(todayTca),
       bloodInvestigations: ['VL', 'FBS', 'FLP'],
@@ -678,6 +829,8 @@ function generateDemoRecords()                  {
       icNumber: '000303-00-0003',
       phone: '013-0000003',
       patientType: 'Existing',
+      isActive: true,
+      appointments: p3Apts,
       nextTca: soonTca,
       bloodInvestigationDate: getOneMonthBeforeISO(soonTca),
       bloodInvestigations: ['VL', 'CD4', 'Other'],
@@ -692,6 +845,8 @@ function generateDemoRecords()                  {
       icNumber: '000404-00-0004',
       phone: '011-0000004',
       patientType: 'Existing',
+      isActive: false, // Showcasing Deactivated / Inactive patient
+      appointments: p4Apts,
       nextTca: laterTca,
       bloodInvestigationDate: getOneMonthBeforeISO(laterTca),
       bloodInvestigations: ['LFT', 'AST', 'RP'],
@@ -706,6 +861,8 @@ function generateDemoRecords()                  {
       icNumber: '000505-00-0005',
       phone: '017-0000005',
       patientType: 'New',
+      isActive: true,
+      appointments: [],
       nextTca: undefined, // No TCA scheduled
       bloodInvestigationDate: undefined,
       bloodInvestigations: [],
@@ -719,10 +876,10 @@ function generateDemoRecords()                  {
 
 
   // --- Module: storage/indexeddb-storage ---
-                                                                           
+                                                                                           
 
 const DB_NAME = 'arv_kkbk_db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_NAME = 'records';
 
 class IndexedDBStorage                           {
@@ -777,6 +934,33 @@ class IndexedDBStorage                           {
                 }
                 if (!Array.isArray(val.bloodInvestigations)) {
                   val.bloodInvestigations = [];
+                  modified = true;
+                }
+              }
+
+              // Migration for version < 4: separate appointment history and isActive status
+              if (oldVersion < 4) {
+                if (val.isActive === undefined) {
+                  val.isActive = true;
+                  modified = true;
+                }
+                if (!Array.isArray(val.appointments) || val.appointments.length === 0) {
+                  val.appointments = [];
+                  if (val.nextTca) {
+                    val.appointments.push({
+                      id: `apt_migrated_${val.id}`,
+                      patientId: val.id,
+                      tcaDate: val.nextTca,
+                      status: 'Scheduled',
+                      notes: 'Initial recorded appointment',
+                      plan: val.plan,
+                      bloodInvestigationDate: val.bloodInvestigationDate,
+                      bloodInvestigations: val.bloodInvestigations || [],
+                      bloodOther: val.bloodOther,
+                      createdAt: val.createdAt || new Date().toISOString(),
+                      updatedAt: val.updatedAt || new Date().toISOString()
+                    });
+                  }
                   modified = true;
                 }
               }
@@ -845,13 +1029,67 @@ class IndexedDBStorage                           {
     const existing = record.id ? await this.get(record.id) : null;
     const investigations = Array.isArray(record.bloodInvestigations) ? record.bloodInvestigations : [];
     const isOtherTicked = investigations.includes('Other');
+    const patientId = record.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
-    const finalRecord                = {
-      id: record.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+    // Manage appointments
+    let appointments                   = [];
+    if (Array.isArray(record.appointments) && record.appointments.length > 0) {
+      appointments = record.appointments;
+    } else if (existing && Array.isArray(existing.appointments) && existing.appointments.length > 0) {
+      appointments = [...existing.appointments];
+      // If user provided or changed nextTca in form, check if we need to update/create scheduled appointment
+      if (record.nextTca && record.nextTca.trim()) {
+        const scheduledIndex = appointments.findIndex(a => a.status === 'Scheduled');
+        if (scheduledIndex >= 0) {
+          appointments[scheduledIndex] = {
+            ...appointments[scheduledIndex],
+            tcaDate: record.nextTca.trim(),
+            bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
+            bloodInvestigations: investigations,
+            bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+            plan: record.plan ? record.plan.trim() : undefined,
+            updatedAt: now
+          };
+        } else {
+          // Add new scheduled appointment
+          appointments.push({
+            id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            patientId,
+            tcaDate: record.nextTca.trim(),
+            status: 'Scheduled',
+            bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
+            bloodInvestigations: investigations,
+            bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+            plan: record.plan ? record.plan.trim() : undefined,
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      }
+    } else if (record.nextTca && record.nextTca.trim()) {
+      appointments = [{
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        patientId,
+        tcaDate: record.nextTca.trim(),
+        status: 'Scheduled',
+        notes: 'Initial appointment',
+        bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
+        bloodInvestigations: investigations,
+        bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+        plan: record.plan ? record.plan.trim() : undefined,
+        createdAt: now,
+        updatedAt: now
+      }];
+    }
+
+    const preRecord      = {
+      id: patientId,
       name: record.name.trim(),
       icNumber: record.icNumber.trim(),
       phone: record.phone ? record.phone.trim() : undefined,
       patientType: record.patientType || existing?.patientType || 'Existing',
+      isActive: record.isActive !== undefined ? Boolean(record.isActive) : (existing?.isActive !== undefined ? existing.isActive : true),
+      appointments,
       nextTca: record.nextTca ? record.nextTca.trim() : undefined,
       bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
       bloodInvestigations: investigations,
@@ -860,6 +1098,8 @@ class IndexedDBStorage                           {
       createdAt: existing?.createdAt || record.createdAt || now,
       updatedAt: now
     };
+
+    const finalRecord = this.normalizeRecord(preRecord);
 
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -967,11 +1207,73 @@ class IndexedDBStorage                           {
     });
   }
 
-          normalizeRecord(raw     )                {
+         normalizeRecord(raw     )                {
     // If legacy bloodInvestigationsPlan is present and plan is absent, migrate it
     const plan = raw.plan !== undefined ? raw.plan : (raw.bloodInvestigationsPlan || undefined);
     const investigations = Array.isArray(raw.bloodInvestigations) ? raw.bloodInvestigations : [];
     const isOther = investigations.includes('Other');
+    const isActive = raw.isActive !== undefined ? Boolean(raw.isActive) : true;
+    const patientId = raw.id;
+
+    // Normalize appointments array
+    let appointments                   = [];
+    if (Array.isArray(raw.appointments) && raw.appointments.length > 0) {
+      appointments = raw.appointments.map((apt     ) => {
+        const aptInvs = Array.isArray(apt.bloodInvestigations) ? apt.bloodInvestigations : [];
+        const isAptOther = aptInvs.includes('Other');
+        return {
+          id: apt.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`),
+          patientId: apt.patientId || patientId,
+          tcaDate: (apt.tcaDate || '').trim(),
+          status: apt.status || 'Scheduled',
+          notes: apt.notes ? apt.notes.trim() : undefined,
+          plan: apt.plan ? apt.plan.trim() : undefined,
+          bloodInvestigationDate: apt.bloodInvestigationDate ? apt.bloodInvestigationDate.trim() : undefined,
+          bloodInvestigations: aptInvs,
+          bloodOther: isAptOther && apt.bloodOther ? apt.bloodOther.trim() : undefined,
+          rescheduledToAppointmentId: apt.rescheduledToAppointmentId,
+          rescheduledFromAppointmentId: apt.rescheduledFromAppointmentId,
+          attendedAt: apt.attendedAt,
+          createdAt: apt.createdAt || raw.createdAt || new Date().toISOString(),
+          updatedAt: apt.updatedAt || raw.updatedAt || new Date().toISOString()
+        };
+      });
+    } else if (raw.nextTca && typeof raw.nextTca === 'string' && raw.nextTca.trim()) {
+      appointments = [{
+        id: `apt_migrated_${patientId}`,
+        patientId,
+        tcaDate: raw.nextTca.trim(),
+        status: 'Scheduled',
+        notes: 'Initial recorded appointment',
+        plan: plan ? plan.trim() : undefined,
+        bloodInvestigationDate: raw.bloodInvestigationDate ? raw.bloodInvestigationDate.trim() : undefined,
+        bloodInvestigations: investigations,
+        bloodOther: isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined,
+        createdAt: raw.createdAt || new Date().toISOString(),
+        updatedAt: raw.updatedAt || new Date().toISOString()
+      }];
+    }
+
+    // Determine latest upcoming scheduled appointment for fast top-level access
+    const scheduledApts = appointments.filter(a => a.status === 'Scheduled');
+    let activeApt                            ;
+
+    if (scheduledApts.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const upcoming = scheduledApts.filter(a => a.tcaDate >= today).sort((a, b) => a.tcaDate.localeCompare(b.tcaDate));
+      if (upcoming.length > 0) {
+        activeApt = upcoming[0];
+      } else {
+        const overdue = [...scheduledApts].sort((a, b) => a.tcaDate.localeCompare(b.tcaDate));
+        activeApt = overdue[0];
+      }
+    }
+
+    const nextTca = activeApt ? activeApt.tcaDate : undefined;
+    const bloodDate = activeApt ? activeApt.bloodInvestigationDate : (raw.bloodInvestigationDate ? raw.bloodInvestigationDate.trim() : undefined);
+    const activeInvs = activeApt ? activeApt.bloodInvestigations : investigations;
+    const activeOther = activeApt ? activeApt.bloodOther : (isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined);
+    const activePlan = activeApt && activeApt.plan ? activeApt.plan : (plan ? plan.trim() : undefined);
 
     return {
       id: raw.id,
@@ -979,14 +1281,153 @@ class IndexedDBStorage                           {
       icNumber: (raw.icNumber || '').trim(),
       phone: raw.phone ? raw.phone.trim() : undefined,
       patientType: (raw.patientType               ) || 'Existing',
-      nextTca: raw.nextTca ? raw.nextTca.trim() : undefined,
-      bloodInvestigationDate: raw.bloodInvestigationDate ? raw.bloodInvestigationDate.trim() : undefined,
-      bloodInvestigations: investigations,
-      bloodOther: isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined,
-      plan: plan ? plan.trim() : undefined,
+      isActive,
+      appointments,
+      nextTca,
+      bloodInvestigationDate: bloodDate,
+      bloodInvestigations: activeInvs,
+      bloodOther: activeOther,
+      plan: activePlan,
       createdAt: raw.createdAt || new Date().toISOString(),
       updatedAt: raw.updatedAt || new Date().toISOString()
     };
+  }
+
+  async addAppointment(
+    patientId        ,
+    aptData                                                                      
+  )                          {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const now = new Date().toISOString();
+    const aptId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newApt                 = {
+      ...aptData,
+      id: aptId,
+      patientId,
+      status: aptData.status || 'Scheduled',
+      bloodInvestigations: Array.isArray(aptData.bloodInvestigations) ? aptData.bloodInvestigations : [],
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const appointments = [...(patient.appointments || []), newApt];
+    await this.save({
+      ...patient,
+      appointments
+    });
+
+    return newApt;
+  }
+
+  async updateAppointment(
+    patientId        ,
+    aptId        ,
+    updates                         
+  )                          {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const appointments = [...(patient.appointments || [])];
+    const index = appointments.findIndex(a => a.id === aptId);
+    if (index === -1) throw new Error(`Appointment ${aptId} not found`);
+
+    const now = new Date().toISOString();
+    const updatedApt                 = {
+      ...appointments[index],
+      ...updates,
+      updatedAt: now
+    };
+
+    if (updates.status === 'Attended' && !updatedApt.attendedAt) {
+      updatedApt.attendedAt = now;
+    }
+
+    appointments[index] = updatedApt;
+
+    await this.save({
+      ...patient,
+      appointments
+    });
+
+    return updatedApt;
+  }
+
+  async rescheduleAppointment(
+    patientId        ,
+    oldAptId        ,
+    newAptData   
+                      
+                     
+                    
+                                      
+                                     
+                          
+     
+  )                                                              {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const appointments = [...(patient.appointments || [])];
+    const oldIndex = appointments.findIndex(a => a.id === oldAptId);
+    if (oldIndex === -1) throw new Error(`Appointment ${oldAptId} not found`);
+
+    const now = new Date().toISOString();
+    const newAptId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    // Mark old appointment as Rescheduled, referencing new appointment
+    const oldApt                 = {
+      ...appointments[oldIndex],
+      status: 'Rescheduled',
+      rescheduledToAppointmentId: newAptId,
+      updatedAt: now
+    };
+    appointments[oldIndex] = oldApt;
+
+    // Create new appointment
+    const newApt                 = {
+      id: newAptId,
+      patientId,
+      tcaDate: newAptData.tcaDate.trim(),
+      status: 'Scheduled',
+      notes: newAptData.notes ? newAptData.notes.trim() : `Rescheduled from ${oldApt.tcaDate}`,
+      plan: newAptData.plan ? newAptData.plan.trim() : oldApt.plan,
+      bloodInvestigationDate: newAptData.bloodInvestigationDate ? newAptData.bloodInvestigationDate.trim() : undefined,
+      bloodInvestigations: Array.isArray(newAptData.bloodInvestigations) ? newAptData.bloodInvestigations : (oldApt.bloodInvestigations || []),
+      bloodOther: newAptData.bloodOther ? newAptData.bloodOther.trim() : oldApt.bloodOther,
+      rescheduledFromAppointmentId: oldAptId,
+      createdAt: now,
+      updatedAt: now
+    };
+    appointments.push(newApt);
+
+    await this.save({
+      ...patient,
+      appointments
+    });
+
+    return { oldApt, newApt };
+  }
+
+  async setPatientActiveStatus(patientId        , isActive         )                         {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    return this.save({
+      ...patient,
+      isActive
+    });
+  }
+
+  async setPatientCategory(patientId        , category             )                         {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    return this.save({
+      ...patient,
+      patientType: category
+    });
   }
 }
 
@@ -1138,13 +1579,13 @@ const confirmSheet = new ConfirmSheet();
 
   // --- Module: utils/export-import ---
 /**
- * Creates a downloadable JSON file of current records.
+ * Creates a downloadable JSON file of current records with appointment history.
  */
 function exportRecordsToJSON(records                 )       {
   const payload                    = {
     app: 'ARV_KKBK',
-    version: '3.0',
-    schemaVersion: 3,
+    version: '4.0',
+    schemaVersion: 4,
     exportedAt: new Date().toISOString(),
     totalRecords: records.length,
     records
@@ -1172,10 +1613,11 @@ function exportRecordsToJSON(records                 )       {
  
 
 const ALLOWED_SET = new Set        (BLOOD_INVESTIGATION_OPTIONS);
+const ALLOWED_STATUSES = new Set                   (['Scheduled', 'Attended', 'DNA', 'Rescheduled', 'Cancelled']);
 
 /**
  * Validates an imported JSON string or parsed object against ARV KKBK schema.
- * Safely migrates schema version 1 and 2 records.
+ * Safely migrates schema version 1, 2, and 3 records to schema 4.
  */
 function validateImportJSON(rawText        )                   {
   let parsed         ;
@@ -1219,11 +1661,14 @@ function validateImportJSON(rawText        )                   {
       return { valid: false, error: `Record "${r.name}" is missing a required IC number.` };
     }
 
-    // Patient type: 'New' or 'Existing', defaults to 'Existing' for older files
+    // Patient type / category: 'New' or 'Existing', defaults to 'Existing'
     let patientType              = 'Existing';
     if (r.patientType === 'New' || r.patientType === 'Existing') {
       patientType = r.patientType;
     }
+
+    const isActive = r.isActive !== undefined ? Boolean(r.isActive) : true;
+    const recordId = typeof r.id === 'string' && r.id ? r.id : `imp_${Date.now()}_${i}`;
 
     // Migration for Plan: if legacy bloodInvestigationsPlan is present and plan is missing, migrate text
     let plan                     = undefined;
@@ -1251,19 +1696,83 @@ function validateImportJSON(rawText        )                   {
     }
 
     const now = new Date().toISOString();
+    const createdAt = typeof r.createdAt === 'string' ? r.createdAt : now;
+    const updatedAt = typeof r.updatedAt === 'string' ? r.updatedAt : now;
+
+    // Validate or synthesize appointments array
+    let appointments                   = [];
+    if (Array.isArray(r.appointments) && r.appointments.length > 0) {
+      for (let aIdx = 0; aIdx < r.appointments.length; aIdx++) {
+        const aptRaw = r.appointments[aIdx]                           ;
+        if (!aptRaw || typeof aptRaw !== 'object') continue;
+
+        const aptInvs           = [];
+        if (Array.isArray(aptRaw.bloodInvestigations)) {
+          for (const inv of aptRaw.bloodInvestigations) {
+            if (typeof inv === 'string' && ALLOWED_SET.has(inv)) {
+              aptInvs.push(inv);
+            }
+          }
+        }
+
+        const aptOther = aptInvs.includes('Other') && typeof aptRaw.bloodOther === 'string' && aptRaw.bloodOther.trim()
+          ? aptRaw.bloodOther.trim()
+          : undefined;
+
+        let status                    = 'Scheduled';
+        if (typeof aptRaw.status === 'string' && ALLOWED_STATUSES.has(aptRaw.status                     )) {
+          status = aptRaw.status                     ;
+        }
+
+        appointments.push({
+          id: typeof aptRaw.id === 'string' && aptRaw.id ? aptRaw.id : `apt_imp_${Date.now()}_${aIdx}`,
+          patientId: recordId,
+          tcaDate: typeof aptRaw.tcaDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(aptRaw.tcaDate.trim()) ? aptRaw.tcaDate.trim() : (typeof r.nextTca === 'string' ? r.nextTca : now.slice(0, 10)),
+          status,
+          notes: typeof aptRaw.notes === 'string' && aptRaw.notes.trim() ? aptRaw.notes.trim() : undefined,
+          plan: typeof aptRaw.plan === 'string' && aptRaw.plan.trim() ? aptRaw.plan.trim() : undefined,
+          bloodInvestigationDate: typeof aptRaw.bloodInvestigationDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(aptRaw.bloodInvestigationDate.trim()) ? aptRaw.bloodInvestigationDate.trim() : undefined,
+          bloodInvestigations: aptInvs,
+          bloodOther: aptOther,
+          rescheduledToAppointmentId: typeof aptRaw.rescheduledToAppointmentId === 'string' ? aptRaw.rescheduledToAppointmentId : undefined,
+          rescheduledFromAppointmentId: typeof aptRaw.rescheduledFromAppointmentId === 'string' ? aptRaw.rescheduledFromAppointmentId : undefined,
+          attendedAt: typeof aptRaw.attendedAt === 'string' ? aptRaw.attendedAt : undefined,
+          createdAt: typeof aptRaw.createdAt === 'string' ? aptRaw.createdAt : createdAt,
+          updatedAt: typeof aptRaw.updatedAt === 'string' ? aptRaw.updatedAt : updatedAt
+        });
+      }
+    } else if (typeof r.nextTca === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.nextTca.trim())) {
+      // Migrating from older backup files with single nextTca
+      appointments.push({
+        id: `apt_migrated_${recordId}`,
+        patientId: recordId,
+        tcaDate: r.nextTca.trim(),
+        status: 'Scheduled',
+        notes: 'Migrated from backup record',
+        plan,
+        bloodInvestigationDate: typeof r.bloodInvestigationDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.bloodInvestigationDate.trim()) ? r.bloodInvestigationDate.trim() : undefined,
+        bloodInvestigations: investigations,
+        bloodOther,
+        createdAt,
+        updatedAt
+      });
+    }
+
     validRecords.push({
-      id: typeof r.id === 'string' && r.id ? r.id : `imp_${Date.now()}_${i}`,
+      id: recordId,
       name: r.name.trim(),
       icNumber: r.icNumber.trim(),
       phone: typeof r.phone === 'string' && r.phone.trim() ? r.phone.trim() : undefined,
       patientType,
+      isActive,
+      appointments,
       nextTca: typeof r.nextTca === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.nextTca.trim()) ? r.nextTca.trim() : undefined,
       bloodInvestigationDate: typeof r.bloodInvestigationDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.bloodInvestigationDate.trim()) ? r.bloodInvestigationDate.trim() : undefined,
       bloodInvestigations: investigations,
       bloodOther,
       plan,
-      createdAt: typeof r.createdAt === 'string' ? r.createdAt : now,
-      updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : now
+      createdAt,
+      updatedAt
     });
   }
 
@@ -1276,7 +1785,7 @@ function validateImportJSON(rawText        )                   {
 
 
   // --- Module: components/record-card ---
-                                              
+                                                           
 function escapeHTML(str        )         {
   return str
     .replace(/&/g, '&amp;')
@@ -1286,9 +1795,30 @@ function escapeHTML(str        )         {
     .replace(/'/g, '&#39;');
 }
 
-function createRecordCard(record               , onClick            )              {
+                                    
+                     
+                     
+                       
+                                                
+                                                       
+ 
+
+function createRecordCard(
+  record               ,
+  actionsOrView                                  
+)              {
+  const actions                    = typeof actionsOrView === 'function'
+    ? {
+        onView: actionsOrView,
+        onEdit: actionsOrView,
+        onDelete: actionsOrView,
+        onToggleActive: () => {},
+        onChangeCategory: () => {}
+      }
+    : actionsOrView;
+
   const card = document.createElement('article');
-  card.className = 'record-card';
+  card.className = `record-card ${record.isActive === false ? 'is-deactivated' : ''}`;
   card.setAttribute('role', 'button');
   card.setAttribute('tabindex', '0');
   card.setAttribute('aria-label', `View profile for patient ${record.name}`);
@@ -1305,10 +1835,16 @@ function createRecordCard(record               , onClick            )           
     `;
   }
 
-  // Patient type subtle label (no loud badge)
-  const patientTypeLabel = record.patientType === 'New'
-    ? `<span class="patient-type-tag type-new">• New</span>`
-    : `<span class="patient-type-tag type-existing">• Existing</span>`;
+  // Patient category subtle label
+  const isNew = record.patientType === 'New';
+  const patientTypeLabel = isNew
+    ? `<span class="patient-type-tag type-new">• New Patient</span>`
+    : `<span class="patient-type-tag type-existing">• Existing Patient</span>`;
+
+  // Deactivated status tag
+  const inactiveBadge = record.isActive === false
+    ? `<span class="patient-status-inactive-badge">Deactivated</span>`
+    : '';
 
   const phoneHtml = record.phone
     ? `<div class="meta-item">
@@ -1372,10 +1908,22 @@ function createRecordCard(record               , onClick            )           
   card.innerHTML = `
     <div class="card-header-row">
       <div class="card-title-group">
-        <h3 class="patient-name">${escapeHTML(record.name)}</h3>
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          <h3 class="patient-name">${escapeHTML(record.name)}</h3>
+          ${inactiveBadge}
+        </div>
         ${patientTypeLabel}
       </div>
-      ${tcaBadgeHtml}
+      <div style="display: flex; align-items: center; gap: 8px;">
+        ${tcaBadgeHtml}
+        <button type="button" class="btn-card-menu" aria-label="Patient actions" title="Patient Actions" aria-haspopup="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="1"></circle>
+            <circle cx="19" cy="12" r="1"></circle>
+            <circle cx="5" cy="12" r="1"></circle>
+          </svg>
+        </button>
+      </div>
     </div>
 
     ${tcaDateDisplay}
@@ -1395,58 +1943,168 @@ function createRecordCard(record               , onClick            )           
     </div>
 
     ${planPreviewHtml}
+
+    <div class="card-direct-actions" style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 0.5px solid var(--color-separator);">
+      <button type="button" class="card-action-btn btn-action-view" data-card-action="view">View</button>
+      <button type="button" class="card-action-btn btn-action-edit" data-card-action="edit">Edit</button>
+      <button type="button" class="card-action-btn btn-action-deactivate" data-card-action="toggle-active">
+        ${record.isActive === false ? 'Reactivate' : 'Deactivate'}
+      </button>
+      <button type="button" class="card-action-btn btn-action-delete" data-card-action="delete" title="Delete Patient Record">
+        Delete
+      </button>
+    </div>
   `;
 
+  // Direct action buttons
+  card.querySelectorAll('[data-card-action]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = btn.getAttribute('data-card-action');
+      if (action === 'view') actions.onView();
+      else if (action === 'edit') actions.onEdit();
+      else if (action === 'toggle-active') actions.onToggleActive(record.isActive === false);
+      else if (action === 'delete') actions.onDelete();
+    });
+  });
+
+  // Action menu dropdown trigger
+  const menuBtn = card.querySelector('.btn-card-menu')                     ;
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openCardDropdownMenu(menuBtn, record, actions);
+  });
+
   card.addEventListener('click', () => {
-    onClick();
+    actions.onView();
   });
 
   card.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
+      // Don't trigger if focus was on an internal button
+      if ((e.target               ).tagName.toLowerCase() === 'button') return;
       e.preventDefault();
-      onClick();
+      actions.onView();
     }
   });
 
   return card;
 }
 
+/**
+ * Creates and shows an action dropdown anchored to the card menu button
+ */
+function openCardDropdownMenu(
+  triggerBtn             ,
+  record               ,
+  actions                   
+)       {
+  const existing = document.getElementById('card-action-dropdown-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'card-action-dropdown-overlay';
+  overlay.className = 'sort-dropdown-overlay is-open';
+  overlay.style.backgroundColor = 'transparent';
+
+  const menu = document.createElement('div');
+  menu.className = 'sort-dropdown-menu is-anchored';
+  menu.style.width = '220px';
+
+  const rect = triggerBtn.getBoundingClientRect();
+  let left = rect.right - 220;
+  if (left < 10) left = 10;
+  let top = rect.bottom + 4;
+  if (top + 240 > window.innerHeight && rect.top > 250) {
+    top = Math.max(10, rect.top - 240);
+  }
+
+  menu.style.position = 'fixed';
+  menu.style.top = `${top}px`;
+  menu.style.left = `${left}px`;
+  menu.style.right = 'auto';
+  menu.style.bottom = 'auto';
+
+  const isNew = record.patientType === 'New';
+  const switchCategoryText = isNew ? 'Switch to Existing Patient' : 'Switch to New Patient';
+  const newCategoryTarget              = isNew ? 'Existing' : 'New';
+
+  const isCurrentlyActive = record.isActive !== false;
+
+  menu.innerHTML = `
+    <div style="display: flex; flex-direction: column; padding: 4px;">
+      <button type="button" class="sort-dropdown-item" data-menu-action="view">
+        <span>👁 View Profile</span>
+      </button>
+      <button type="button" class="sort-dropdown-item" data-menu-action="edit">
+        <span>✎ Edit Patient Details</span>
+      </button>
+      <button type="button" class="sort-dropdown-item" data-menu-action="category">
+        <span>🏷 ${switchCategoryText}</span>
+      </button>
+      <button type="button" class="sort-dropdown-item" data-menu-action="toggle-active">
+        <span>${isCurrentlyActive ? '🚫 Deactivate Patient' : '✓ Reactivate Patient'}</span>
+      </button>
+      <button type="button" class="sort-dropdown-item" data-menu-action="delete" style="color: var(--color-destructive);">
+        <span>🗑 Delete Patient Record</span>
+      </button>
+    </div>
+  `;
+
+  overlay.appendChild(menu);
+  document.body.appendChild(overlay);
+
+  const closeMenu = () => overlay.remove();
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeMenu();
+  });
+
+  menu.querySelectorAll('[data-menu-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      closeMenu();
+      const action = btn.getAttribute('data-menu-action');
+      if (action === 'view') actions.onView();
+      else if (action === 'edit') actions.onEdit();
+      else if (action === 'category') actions.onChangeCategory(newCategoryTarget);
+      else if (action === 'toggle-active') actions.onToggleActive(!isCurrentlyActive);
+      else if (action === 'delete') actions.onDelete();
+    });
+  });
+}
+
 
   // --- Module: components/sort-sheet ---
 class SortSheet {
           overlayEl             ;
+          menuEl             ;
           currentActive            = 'tca_asc';
           onSelectCallback                                     = null;
           previousActiveElement                     = null;
 
   constructor() {
     this.overlayEl = document.createElement('div');
-    this.overlayEl.className = 'modal-overlay';
+    this.overlayEl.className = 'sort-dropdown-overlay';
     this.overlayEl.setAttribute('role', 'dialog');
     this.overlayEl.setAttribute('aria-modal', 'true');
     this.overlayEl.setAttribute('aria-label', 'Sort Records');
 
     this.overlayEl.innerHTML = `
-      <div class="bottom-sheet" style="max-width: 420px;">
-        <div class="sheet-grab-bar"></div>
-        <div class="sheet-header">
-          <span class="sheet-title">Sort Records</span>
-          <button type="button" class="btn-icon" data-action="close" aria-label="Close sort sheet">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <div class="sort-dropdown-menu" id="sort-dropdown-container">
+        <div class="sort-dropdown-header">
+          <span class="sort-dropdown-title">Sort By</span>
+          <button type="button" class="btn-icon" data-action="close" aria-label="Close sort menu">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
             </svg>
           </button>
         </div>
-        <div class="sheet-body" style="padding: 12px 16px;">
-          <div class="action-sheet-options" id="sort-options-list"></div>
-        </div>
-        <div class="sheet-footer" style="justify-content: center; padding: 10px 16px;">
-          <button type="button" class="btn-secondary" style="width: 100%; font-weight: 600;" data-action="close">Done</button>
-        </div>
+        <div class="sort-options-list" id="sort-options-list" role="radiogroup" aria-label="Sort options"></div>
       </div>
     `;
 
+    this.menuEl = this.overlayEl.querySelector('#sort-dropdown-container')               ;
     document.body.appendChild(this.overlayEl);
     this.bindEvents();
   }
@@ -1464,6 +2122,54 @@ class SortSheet {
         this.close();
       }
     });
+
+    // Reposition on window resize if open
+    window.addEventListener('resize', () => {
+      if (this.isOpen() && this.previousActiveElement) {
+        this.positionMenu(this.previousActiveElement);
+      }
+    });
+  }
+
+          positionMenu(triggerEl              )       {
+    if (!triggerEl) return;
+
+    const isDesktop = window.innerWidth >= 480;
+    if (isDesktop) {
+      const rect = triggerEl.getBoundingClientRect();
+      const menuWidth = Math.min(300, window.innerWidth - 24);
+      let left = rect.right - menuWidth;
+      if (left < 12) left = 12;
+
+      let top = rect.bottom + 6;
+      const maxHeight = Math.max(200, window.innerHeight - top - 16);
+
+      // If near bottom of screen, flip upwards
+      if (top + 280 > window.innerHeight && rect.top > 300) {
+        top = Math.max(12, rect.top - 320);
+      }
+
+      this.menuEl.style.position = 'fixed';
+      this.menuEl.style.top = `${top}px`;
+      this.menuEl.style.left = `${left}px`;
+      this.menuEl.style.right = 'auto';
+      this.menuEl.style.bottom = 'auto';
+      this.menuEl.style.width = `${menuWidth}px`;
+      this.menuEl.style.maxHeight = `${maxHeight}px`;
+      this.menuEl.classList.add('is-anchored');
+      this.menuEl.classList.remove('is-sheet');
+    } else {
+      // Small mobile: smooth bottom sheet anchored to bottom
+      this.menuEl.style.position = 'fixed';
+      this.menuEl.style.top = 'auto';
+      this.menuEl.style.bottom = '0';
+      this.menuEl.style.left = '0';
+      this.menuEl.style.right = '0';
+      this.menuEl.style.width = '100%';
+      this.menuEl.style.maxHeight = '75vh';
+      this.menuEl.classList.add('is-sheet');
+      this.menuEl.classList.remove('is-anchored');
+    }
   }
 
           renderOptions()       {
@@ -1475,14 +2181,14 @@ class SortSheet {
       const isSelected = option.id === this.currentActive;
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = `action-sheet-item ${isSelected ? 'is-active' : ''}`;
+      btn.className = `sort-dropdown-item ${isSelected ? 'is-active' : ''}`;
       btn.setAttribute('role', 'radio');
       btn.setAttribute('aria-checked', isSelected ? 'true' : 'false');
       btn.innerHTML = `
-        <span>${option.label}</span>
+        <span class="sort-item-label">${option.label}</span>
         ${
           isSelected
-            ? `<svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            ? `<svg class="sort-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12"></polyline>
                </svg>`
             : ''
@@ -1507,12 +2213,13 @@ class SortSheet {
     this.previousActiveElement = triggerEl || (document.activeElement               );
 
     this.renderOptions();
+    this.positionMenu(this.previousActiveElement);
     this.overlayEl.classList.add('is-open');
 
-    // Auto-focus first active option or close button
-    const activeBtn = this.overlayEl.querySelector('.action-sheet-item.is-active')               ;
+    // Safe focus with preventScroll so browser never jumps or scrolls viewport
+    const activeBtn = this.overlayEl.querySelector('.sort-dropdown-item.is-active')               ;
     if (activeBtn) {
-      activeBtn.focus();
+      activeBtn.focus({ preventScroll: true });
     }
   }
 
@@ -1521,7 +2228,7 @@ class SortSheet {
     this.overlayEl.classList.remove('is-open');
 
     if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
-      this.previousActiveElement.focus();
+      this.previousActiveElement.focus({ preventScroll: true });
     }
   }
 
@@ -1534,7 +2241,6 @@ class SortSheet {
   // --- Module: components/record-modal ---
 class RecordModal {
           overlayEl             ;
-          pickerOverlayEl              ;
           currentRecord                       = null;
           savedRecords                  = [];
           isEditMode = false;
@@ -1568,7 +2274,7 @@ class RecordModal {
       <div class="bottom-sheet">
         <div class="sheet-grab-bar"></div>
         <div class="sheet-header">
-          <span class="sheet-title" id="form-modal-title">New Patient Record</span>
+          <span class="sheet-title" id="form-modal-title">New Patient Registration</span>
           <button type="button" class="btn-icon" data-action="close" aria-label="Cancel and close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1578,26 +2284,18 @@ class RecordModal {
         </div>
         <form id="patient-form" class="sheet-body" novalidate>
           <div class="form-group" id="group-patient-type">
-            <label class="form-label required">Patient Type</label>
-            <div class="segmented-control" id="segmented-patient-type" role="radiogroup" aria-label="Patient Type">
-              <button type="button" class="segment-btn is-active" data-value="Existing" role="radio" aria-checked="true">Existing</button>
-              <button type="button" class="segment-btn" data-value="New" role="radio" aria-checked="false">New</button>
+            <label class="form-label required">Patient Category</label>
+            <div class="segmented-control" id="segmented-patient-type" role="radiogroup" aria-label="Patient Category">
+              <button type="button" class="segment-btn is-active" data-value="Existing" role="radio" aria-checked="true">Existing Patient</button>
+              <button type="button" class="segment-btn" data-value="New" role="radio" aria-checked="false">New Patient</button>
             </div>
             <input type="hidden" id="field-patient-type" value="Existing" />
+            <span class="form-hint">Categorize patient as New Patient or Existing Patient (editable anytime).</span>
           </div>
 
           <div class="form-group" id="group-patient-name">
             <label class="form-label required" for="field-name">Patient Name</label>
-            <!-- Normal text input (used for New patients and in Edit mode) -->
-            <input type="text" id="field-name" class="form-input" placeholder="e.g. Demo Patient 01" autocomplete="off" />
-            
-            <!-- Existing Patient Picker Button (used when adding for Existing patient) -->
-            <button type="button" id="btn-patient-picker-trigger" class="btn-patient-picker is-placeholder" style="display: none;" aria-haspopup="dialog">
-              <span id="picker-trigger-text">Select existing patient...</span>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </button>
+            <input type="text" id="field-name" class="form-input" placeholder="e.g. Demo Patient 01" autocomplete="off" required />
             <span class="form-error" id="error-name" style="display: none;">Name is required</span>
           </div>
 
@@ -1623,6 +2321,7 @@ class RecordModal {
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
             </div>
+            <span class="form-hint">Optional. Creates an initial scheduled appointment for this patient.</span>
           </div>
 
           <div class="form-group">
@@ -1656,74 +2355,19 @@ class RecordModal {
 
           <!-- 2. PLAN (SEPARATE MULTI-LINE TEXTAREA) -->
           <div class="form-group">
-            <label class="form-label" for="field-plan">Plan</label>
+            <label class="form-label" for="field-plan">Clinical / Follow-up Plan</label>
             <textarea id="field-plan" class="form-textarea" placeholder="e.g. Adherence counseling, repeat viral load in 6 months, stable on TLD..."></textarea>
           </div>
         </form>
         <div class="sheet-footer">
           <button type="button" class="btn-secondary" data-action="close">Cancel</button>
-          <button type="submit" form="patient-form" id="btn-save-record" class="btn-primary">Save Record</button>
+          <button type="submit" form="patient-form" id="btn-save-record" class="btn-primary">Save Patient</button>
         </div>
       </div>
     `;
 
     document.body.appendChild(this.overlayEl);
-    this.createPickerOverlay();
     this.bindEvents();
-  }
-
-          createPickerOverlay()       {
-    this.pickerOverlayEl = document.createElement('div');
-    this.pickerOverlayEl.className = 'modal-overlay';
-    this.pickerOverlayEl.setAttribute('role', 'dialog');
-    this.pickerOverlayEl.setAttribute('aria-modal', 'true');
-    this.pickerOverlayEl.setAttribute('aria-label', 'Select Existing Patient');
-
-    this.pickerOverlayEl.innerHTML = `
-      <div class="bottom-sheet picker-sheet">
-        <div class="sheet-grab-bar"></div>
-        <div class="sheet-header">
-          <span class="sheet-title">Select Existing Patient</span>
-          <button type="button" class="btn-icon" data-picker-action="close" aria-label="Close patient picker">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="picker-search-container">
-          <div class="search-wrapper">
-            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            <input
-              type="search"
-              id="picker-search-input"
-              class="search-input"
-              placeholder="Search existing patients..."
-              autocomplete="off"
-            />
-          </div>
-        </div>
-        <div class="picker-list-container" id="picker-patient-list" role="listbox"></div>
-      </div>
-    `;
-
-    document.body.appendChild(this.pickerOverlayEl);
-
-    // Picker search listener
-    const searchInput = this.pickerOverlayEl.querySelector('#picker-search-input')                    ;
-    searchInput.addEventListener('input', () => {
-      this.renderPickerList(searchInput.value);
-    });
-
-    this.pickerOverlayEl.addEventListener('click', (e) => {
-      const target = e.target               ;
-      if (target === this.pickerOverlayEl || target.closest('[data-picker-action="close"]')) {
-        this.closePicker();
-      }
-    });
   }
 
           bindEvents()       {
@@ -1731,33 +2375,17 @@ class RecordModal {
     const tcaInput = this.overlayEl.querySelector('#field-tca')                    ;
     const bloodInput = this.overlayEl.querySelector('#field-blood-date')                    ;
     const segContainer = this.overlayEl.querySelector('#segmented-patient-type')               ;
-    const pickerTrigger = this.overlayEl.querySelector('#btn-patient-picker-trigger')                     ;
     const chipsContainer = this.overlayEl.querySelector('#chips-investigations')               ;
     const otherContainer = this.overlayEl.querySelector('#container-blood-other')               ;
     const otherInput = this.overlayEl.querySelector('#field-blood-other')                    ;
     const otherError = this.overlayEl.querySelector('#error-blood-other')               ;
 
-    // Segmented patient type toggle with unsaved changes confirmation
-    segContainer.addEventListener('click', async (e) => {
+    // Segmented patient category toggle: smoothly changes category without clearing data
+    segContainer.addEventListener('click', (e) => {
       const target = (e.target               ).closest('.segment-btn')                     ;
       if (!target) return;
       const targetVal = target.getAttribute('data-value')               ;
-      const currentVal = this.getPatientTypeValue();
-      if (targetVal === currentVal) return;
-
-      if (this.isFormDirty()) {
-        const confirmed = await confirmSheet.show({
-          title: 'Switch Patient Type?',
-          message: 'Switching patient type will clear the current form data. Continue?',
-          confirmLabel: 'Clear and Switch',
-          cancelLabel: 'Keep Current',
-          isDestructive: false
-        });
-
-        if (!confirmed) return;
-      }
-
-      this.switchPatientType(targetVal);
+      this.setPatientCategoryUI(targetVal);
     });
 
     // Toggle investigation chips
@@ -1774,7 +2402,6 @@ class RecordModal {
           otherContainer.style.display = 'flex';
           otherInput.focus();
         } else {
-          // Unticking Other clears its text and hides
           otherContainer.style.display = 'none';
           otherInput.value = '';
           otherError.style.display = 'none';
@@ -1787,11 +2414,6 @@ class RecordModal {
       if (otherInput.value.trim()) {
         otherError.style.display = 'none';
       }
-    });
-
-    // Open Existing Patient Picker
-    pickerTrigger.addEventListener('click', () => {
-      this.openPicker();
     });
 
     // Auto-suggest Blood date 1 month before TCA
@@ -1818,18 +2440,26 @@ class RecordModal {
     });
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        if (this.isPickerOpen()) {
-          this.closePicker();
-        } else if (this.isOpen()) {
-          this.close();
-        }
+      if (e.key === 'Escape' && this.isOpen()) {
+        this.close();
       }
     });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       await this.handleFormSubmit();
+    });
+  }
+
+          setPatientCategoryUI(type             )       {
+    const typeInput = this.overlayEl.querySelector('#field-patient-type')                    ;
+    typeInput.value = type;
+
+    const segContainer = this.overlayEl.querySelector('#segmented-patient-type')               ;
+    segContainer.querySelectorAll('.segment-btn').forEach(btn => {
+      const isSelected = btn.getAttribute('data-value') === type;
+      btn.classList.toggle('is-active', isSelected);
+      btn.setAttribute('aria-checked', isSelected ? 'true' : 'false');
     });
   }
 
@@ -1861,206 +2491,6 @@ class RecordModal {
           getPatientTypeValue()              {
     const typeInput = this.overlayEl.querySelector('#field-patient-type')                    ;
     return (typeInput.value               ) || 'Existing';
-  }
-
-          isFormDirty()          {
-    const nameInput = this.overlayEl.querySelector('#field-name')                    ;
-    const icInput = this.overlayEl.querySelector('#field-ic')                    ;
-    const phoneInput = this.overlayEl.querySelector('#field-phone')                    ;
-    const planInput = this.overlayEl.querySelector('#field-plan')                       ;
-    const otherInput = this.overlayEl.querySelector('#field-blood-other')                    ;
-    const currentInvs = this.getSelectedInvestigations();
-
-    if (this.currentRecord) {
-      const origInvs = this.currentRecord.bloodInvestigations || [];
-      const invsMatch = currentInvs.length === origInvs.length && currentInvs.every(i => origInvs.includes(i));
-      return (
-        nameInput.value !== this.currentRecord.name ||
-        icInput.value !== this.currentRecord.icNumber ||
-        phoneInput.value !== (this.currentRecord.phone || '') ||
-        planInput.value !== (this.currentRecord.plan || '') ||
-        otherInput.value !== (this.currentRecord.bloodOther || '') ||
-        !invsMatch
-      );
-    }
-
-    return Boolean(
-      nameInput.value.trim() ||
-      icInput.value.trim() ||
-      phoneInput.value.trim() ||
-      planInput.value.trim() ||
-      otherInput.value.trim() ||
-      currentInvs.length > 0
-    );
-  }
-
-          switchPatientType(type             )       {
-    const typeInput = this.overlayEl.querySelector('#field-patient-type')                    ;
-    typeInput.value = type;
-
-    const segContainer = this.overlayEl.querySelector('#segmented-patient-type')               ;
-    segContainer.querySelectorAll('.segment-btn').forEach(btn => {
-      const isSelected = btn.getAttribute('data-value') === type;
-      btn.classList.toggle('is-active', isSelected);
-      btn.setAttribute('aria-checked', isSelected ? 'true' : 'false');
-    });
-
-    this.currentRecord = null;
-    this.resetFormFields();
-    this.updateNameInputVisibility();
-  }
-
-          resetFormFields()       {
-    const nameInput = this.overlayEl.querySelector('#field-name')                    ;
-    const icInput = this.overlayEl.querySelector('#field-ic')                    ;
-    const phoneInput = this.overlayEl.querySelector('#field-phone')                    ;
-    const tcaInput = this.overlayEl.querySelector('#field-tca')                    ;
-    const bloodInput = this.overlayEl.querySelector('#field-blood-date')                    ;
-    const otherInput = this.overlayEl.querySelector('#field-blood-other')                    ;
-    const planInput = this.overlayEl.querySelector('#field-plan')                       ;
-    const pickerTriggerText = this.overlayEl.querySelector('#picker-trigger-text')               ;
-    const pickerBtn = this.overlayEl.querySelector('#btn-patient-picker-trigger')                     ;
-
-    nameInput.value = '';
-    icInput.value = '';
-    phoneInput.value = '';
-    tcaInput.value = '';
-    bloodInput.value = '';
-    otherInput.value = '';
-    planInput.value = '';
-    this.isBloodDateManuallyEdited = false;
-    this.setSelectedInvestigations([]);
-
-    pickerTriggerText.textContent = 'Select existing patient...';
-    pickerBtn.classList.add('is-placeholder');
-
-    const errorName = this.overlayEl.querySelector('#error-name')               ;
-    const errorIc = this.overlayEl.querySelector('#error-ic')               ;
-    const errorBlood = this.overlayEl.querySelector('#error-blood-date')               ;
-    const errorOther = this.overlayEl.querySelector('#error-blood-other')               ;
-    errorName.style.display = 'none';
-    errorIc.style.display = 'none';
-    errorBlood.style.display = 'none';
-    errorOther.style.display = 'none';
-  }
-
-          updateNameInputVisibility()       {
-    const nameInput = this.overlayEl.querySelector('#field-name')                    ;
-    const pickerBtn = this.overlayEl.querySelector('#btn-patient-picker-trigger')                     ;
-    const patientType = this.getPatientTypeValue();
-
-    if (!this.isEditMode && patientType === 'Existing') {
-      nameInput.style.display = 'none';
-      pickerBtn.style.display = 'flex';
-    } else {
-      nameInput.style.display = 'block';
-      pickerBtn.style.display = 'none';
-    }
-  }
-
-          openPicker()       {
-    const searchInput = this.pickerOverlayEl.querySelector('#picker-search-input')                    ;
-    searchInput.value = '';
-    this.renderPickerList('');
-    this.pickerOverlayEl.classList.add('is-open');
-    window.setTimeout(() => searchInput.focus(), 100);
-  }
-
-          closePicker()       {
-    this.pickerOverlayEl.classList.remove('is-open');
-  }
-
-          isPickerOpen()          {
-    return this.pickerOverlayEl.classList.contains('is-open');
-  }
-
-          renderPickerList(query        )       {
-    const listEl = this.pickerOverlayEl.querySelector('#picker-patient-list')               ;
-    listEl.innerHTML = '';
-
-    const sorted = [...this.savedRecords].sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-    );
-
-    const q = query.trim().toLowerCase();
-    const filtered = q
-      ? sorted.filter(r => r.name.toLowerCase().includes(q) || r.icNumber.includes(q))
-      : sorted;
-
-    if (this.savedRecords.length === 0) {
-      listEl.innerHTML = `
-        <div class="picker-empty-state">
-          <p style="font-size: 14.5px; font-weight: 500;">No existing patients yet</p>
-          <button type="button" id="btn-picker-switch-new" class="btn-primary" style="height: 36px; padding: 0 14px; font-size: 13.5px;">
-            Switch to New Patient
-          </button>
-        </div>
-      `;
-      listEl.querySelector('#btn-picker-switch-new')?.addEventListener('click', () => {
-        this.closePicker();
-        this.switchPatientType('New');
-      });
-      return;
-    }
-
-    if (filtered.length === 0) {
-      listEl.innerHTML = `
-        <div class="picker-empty-state">
-          <p style="font-size: 14px;">No patients match "${this.escapeText(query)}"</p>
-        </div>
-      `;
-      return;
-    }
-
-    for (const record of filtered) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'picker-item';
-      btn.setAttribute('role', 'option');
-
-      const cleanIC = record.icNumber.replace(/[\s-]/g, '');
-      const last4 = cleanIC.length >= 4 ? cleanIC.slice(-4) : cleanIC;
-
-      btn.innerHTML = `
-        <span class="picker-item-name">${this.escapeText(record.name)}</span>
-        <span class="picker-item-ic">IC: •••• ${this.escapeText(last4)}</span>
-      `;
-
-      btn.addEventListener('click', () => {
-        this.selectExistingPatient(record);
-        this.closePicker();
-      });
-
-      listEl.appendChild(btn);
-    }
-  }
-
-          selectExistingPatient(record               )       {
-    this.currentRecord = record;
-
-    const nameInput = this.overlayEl.querySelector('#field-name')                    ;
-    const icInput = this.overlayEl.querySelector('#field-ic')                    ;
-    const phoneInput = this.overlayEl.querySelector('#field-phone')                    ;
-    const tcaInput = this.overlayEl.querySelector('#field-tca')                    ;
-    const bloodInput = this.overlayEl.querySelector('#field-blood-date')                    ;
-    const otherInput = this.overlayEl.querySelector('#field-blood-other')                    ;
-    const planInput = this.overlayEl.querySelector('#field-plan')                       ;
-    const pickerTriggerText = this.overlayEl.querySelector('#picker-trigger-text')               ;
-    const pickerBtn = this.overlayEl.querySelector('#btn-patient-picker-trigger')                     ;
-
-    nameInput.value = record.name;
-    icInput.value = record.icNumber;
-    phoneInput.value = record.phone || '';
-    tcaInput.value = record.nextTca || '';
-    bloodInput.value = record.bloodInvestigationDate || '';
-    otherInput.value = record.bloodOther || '';
-    planInput.value = record.plan || '';
-    this.isBloodDateManuallyEdited = Boolean(record.bloodInvestigationDate);
-
-    this.setSelectedInvestigations(record.bloodInvestigations || []);
-
-    pickerTriggerText.textContent = record.name;
-    pickerBtn.classList.remove('is-placeholder');
   }
 
           validateBloodDate()          {
@@ -2110,7 +2540,6 @@ class RecordModal {
       hasError = true;
     }
 
-    // "Other" validation: required only if Other is ticked
     const selectedInvs = this.getSelectedInvestigations();
     if (selectedInvs.includes('Other')) {
       if (!otherInput.value.trim()) {
@@ -2125,12 +2554,7 @@ class RecordModal {
 
     if (hasError) {
       if (!nameInput.value.trim()) {
-        const patientType = this.getPatientTypeValue();
-        if (!this.isEditMode && patientType === 'Existing') {
-          this.openPicker();
-        } else {
-          nameInput.focus();
-        }
+        nameInput.focus();
       } else if (!icInput.value.trim()) {
         icInput.focus();
       } else if (selectedInvs.includes('Other') && !otherInput.value.trim()) {
@@ -2145,26 +2569,25 @@ class RecordModal {
     const trimmedIc = icInput.value.trim();
     const normalizedNewIc = normalizeCode(trimmedIc);
 
-    // Duplicate IC check when saving a "New" patient
-    if (patientType === 'New' && !this.isEditMode) {
+    // Duplicate IC check when saving a new patient
+    if (!this.isEditMode) {
       const existingMatch = this.savedRecords.find(
         r => normalizeCode(r.icNumber) === normalizedNewIc
       );
 
       if (existingMatch) {
-        const shouldOpenExisting = await confirmSheet.show({
-          title: 'Duplicate IC Number Warning',
-          message: `A record with IC "${trimmedIc}" already exists as "${existingMatch.name}". Would you like to open that record instead of creating a duplicate?`,
-          confirmLabel: 'Open Existing Record',
-          cancelLabel: 'Keep Editing',
+        const shouldProceed = await confirmSheet.show({
+          title: 'Duplicate IC Warning',
+          message: `A patient with IC "${trimmedIc}" already exists as "${existingMatch.name}". Are you sure you want to proceed with registering this record?`,
+          confirmLabel: 'Save Anyway',
+          cancelLabel: 'Review IC',
           isDestructive: false
         });
 
-        if (shouldOpenExisting) {
-          this.switchPatientType('Existing');
-          this.selectExistingPatient(existingMatch);
+        if (!shouldProceed) {
+          icInput.focus();
+          return;
         }
-        return;
       }
     }
 
@@ -2180,6 +2603,8 @@ class RecordModal {
           icNumber: trimmedIc,
           phone: phoneInput.value.trim() || undefined,
           patientType,
+          isActive: this.currentRecord?.isActive !== undefined ? this.currentRecord.isActive : true,
+          appointments: this.currentRecord?.appointments,
           nextTca: tcaInput.value || undefined,
           bloodInvestigationDate: bloodInput.value || undefined,
           bloodInvestigations: selectedInvs,
@@ -2191,7 +2616,7 @@ class RecordModal {
       this.close();
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Record';
+      saveBtn.textContent = 'Save Patient';
     }
   }
 
@@ -2216,10 +2641,6 @@ class RecordModal {
     const bloodInput = this.overlayEl.querySelector('#field-blood-date')                    ;
     const otherInput = this.overlayEl.querySelector('#field-blood-other')                    ;
     const planInput = this.overlayEl.querySelector('#field-plan')                       ;
-    const segContainer = this.overlayEl.querySelector('#segmented-patient-type')               ;
-    const typeGroup = this.overlayEl.querySelector('#group-patient-type')               ;
-    const pickerTriggerText = this.overlayEl.querySelector('#picker-trigger-text')               ;
-    const pickerBtn = this.overlayEl.querySelector('#btn-patient-picker-trigger')                     ;
 
     const errorName = this.overlayEl.querySelector('#error-name')               ;
     const errorIc = this.overlayEl.querySelector('#error-ic')               ;
@@ -2231,7 +2652,7 @@ class RecordModal {
     errorOther.style.display = 'none';
 
     if (record) {
-      titleEl.textContent = 'Edit Record';
+      titleEl.textContent = 'Edit Patient Record';
       nameInput.value = record.name;
       icInput.value = record.icNumber;
       phoneInput.value = record.phone || '';
@@ -2242,9 +2663,8 @@ class RecordModal {
       planInput.value = record.plan || '';
       this.isBloodDateManuallyEdited = Boolean(record.bloodInvestigationDate);
       this.setSelectedInvestigations(record.bloodInvestigations || []);
-      typeGroup.style.display = 'none';
     } else {
-      titleEl.textContent = 'New Patient Record';
+      titleEl.textContent = 'New Patient Registration';
       nameInput.value = '';
       icInput.value = '';
       phoneInput.value = '';
@@ -2255,27 +2675,15 @@ class RecordModal {
       planInput.value = '';
       this.isBloodDateManuallyEdited = false;
       this.setSelectedInvestigations([]);
-      typeGroup.style.display = 'flex';
-      pickerTriggerText.textContent = 'Select existing patient...';
-      pickerBtn.classList.add('is-placeholder');
     }
 
-    segContainer.querySelectorAll('.segment-btn').forEach(btn => {
-      const isSelected = btn.getAttribute('data-value') === typeInput.value;
-      btn.classList.toggle('is-active', isSelected);
-      btn.setAttribute('aria-checked', isSelected ? 'true' : 'false');
-    });
+    this.setPatientCategoryUI((typeInput.value               ) || 'Existing');
 
-    this.updateNameInputVisibility();
     document.body.classList.add('modal-open');
     this.overlayEl.classList.add('is-open');
 
     window.setTimeout(() => {
-      if (!this.isEditMode && this.getPatientTypeValue() === 'Existing') {
-        pickerBtn.focus();
-      } else {
-        nameInput.focus();
-      }
+      nameInput.focus();
     }, 100);
   }
 
@@ -2283,7 +2691,6 @@ class RecordModal {
     if (!this.isOpen()) return;
     document.body.classList.remove('modal-open');
     this.overlayEl.classList.remove('is-open');
-    this.closePicker();
 
     if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
       this.previousActiveElement.focus();
@@ -2293,21 +2700,385 @@ class RecordModal {
          isOpen()          {
     return this.overlayEl.classList.contains('is-open');
   }
+}
 
-          escapeText(text        )         {
-    return text.replace(/[&<>"']/g, (m) => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    })[m] || m);
+
+  // --- Module: components/appointment-modal ---
+class AppointmentModal {
+          overlayEl             ;
+          mode                       = 'new';
+          patient                       = null;
+          targetAppointment                        = null;
+          isBloodDateManuallyEdited = false;
+          onSaveCallback                                                             = null;
+          previousActiveElement                     = null;
+
+  constructor() {
+    this.overlayEl = document.createElement('div');
+    this.overlayEl.className = 'modal-overlay';
+    this.overlayEl.setAttribute('role', 'dialog');
+    this.overlayEl.setAttribute('aria-modal', 'true');
+    this.overlayEl.setAttribute('aria-label', 'TCA Appointment Form');
+
+    const chipsHtml = BLOOD_INVESTIGATION_OPTIONS.map(opt => `
+      <button
+        type="button"
+        class="chip-checkbox"
+        data-apt-inv="${opt}"
+        role="checkbox"
+        aria-checked="false"
+      >
+        <svg class="chip-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>${opt}</span>
+      </button>
+    `).join('');
+
+    this.overlayEl.innerHTML = `
+      <div class="bottom-sheet" style="max-width: 500px;">
+        <div class="sheet-grab-bar"></div>
+        <div class="sheet-header">
+          <span class="sheet-title" id="apt-modal-title">Schedule New TCA</span>
+          <button type="button" class="btn-icon" data-action="close" aria-label="Cancel and close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <form id="apt-form" class="sheet-body" novalidate>
+          <div id="apt-patient-banner" style="padding: 8px 12px; background-color: var(--color-bg-secondary); border-radius: var(--radius-md); font-size: 13.5px; color: var(--color-text-secondary); margin-bottom: 4px;">
+            Patient: <strong id="apt-patient-name" style="color: var(--color-text-primary);"></strong>
+          </div>
+
+          <div id="apt-reschedule-notice" style="display: none; padding: 10px 12px; background-color: var(--color-accent-subtle); border-radius: var(--radius-md); font-size: 13px; color: var(--color-accent); margin-bottom: 6px;">
+            Rescheduling will preserve the original appointment in TCA History and schedule this new date.
+          </div>
+
+          <div class="form-group">
+            <label class="form-label required" for="apt-field-tca">Appointment Date (Next TCA)</label>
+            <div class="date-input-container">
+              <input type="date" id="apt-field-tca" class="form-input form-date-input" required />
+              <svg class="date-picker-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </div>
+            <span class="form-error" id="apt-error-tca" style="display: none;">TCA Date is required</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="apt-field-blood-date">Blood Investigation Date ("Blood date")</label>
+            <div class="date-input-container">
+              <input type="date" id="apt-field-blood-date" class="form-input form-date-input" />
+              <svg class="date-picker-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </div>
+            <span class="form-hint">Prefills to 1 month before TCA if untouched. Can be edited or cleared.</span>
+            <span class="form-error" id="apt-error-blood-date" style="display: none;">Blood date cannot be after Next TCA</span>
+          </div>
+
+          <!-- BLOOD INVESTIGATIONS (TICKABLE) -->
+          <div class="form-group">
+            <label class="form-label">Blood Investigations</label>
+            <div class="investigation-chips-group" id="apt-chips-investigations" role="group" aria-label="Blood Investigations">
+              ${chipsHtml}
+            </div>
+            
+            <div class="blood-other-container" id="apt-container-blood-other" style="display: none;">
+              <label class="form-label required" for="apt-field-blood-other" style="font-size: 13px;">State other investigation</label>
+              <input type="text" id="apt-field-blood-other" class="form-input" placeholder="e.g. TFT, Hep B/C, Urine FEME" autocomplete="off" />
+              <span class="form-error" id="apt-error-blood-other" style="display: none;">Please state the other investigation</span>
+            </div>
+          </div>
+
+          <!-- PLAN -->
+          <div class="form-group">
+            <label class="form-label" for="apt-field-plan">Follow-up Plan</label>
+            <textarea id="apt-field-plan" class="form-textarea" placeholder="e.g. Review VL & CD4 results, assess ART adherence, renew 3-month supply..."></textarea>
+          </div>
+
+          <!-- NOTES -->
+          <div class="form-group">
+            <label class="form-label" for="apt-field-notes">Appointment Notes</label>
+            <input type="text" id="apt-field-notes" class="form-input" placeholder="e.g. Patient requested morning slot; fasting for FBS" autocomplete="off" />
+          </div>
+        </form>
+        <div class="sheet-footer">
+          <button type="button" class="btn-secondary" data-action="close">Cancel</button>
+          <button type="submit" form="apt-form" id="btn-save-apt" class="btn-primary">Save Appointment</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(this.overlayEl);
+    this.bindEvents();
+  }
+
+          bindEvents()       {
+    const form = this.overlayEl.querySelector('#apt-form')                   ;
+    const tcaInput = this.overlayEl.querySelector('#apt-field-tca')                    ;
+    const bloodInput = this.overlayEl.querySelector('#apt-field-blood-date')                    ;
+    const chipsContainer = this.overlayEl.querySelector('#apt-chips-investigations')               ;
+    const otherContainer = this.overlayEl.querySelector('#apt-container-blood-other')               ;
+    const otherInput = this.overlayEl.querySelector('#apt-field-blood-other')                    ;
+    const otherError = this.overlayEl.querySelector('#apt-error-blood-other')               ;
+
+    // Toggle investigation chips
+    chipsContainer.addEventListener('click', (e) => {
+      const btn = (e.target               ).closest('.chip-checkbox')                     ;
+      if (!btn) return;
+
+      const isChecked = btn.classList.toggle('is-checked');
+      btn.setAttribute('aria-checked', isChecked ? 'true' : 'false');
+
+      const invKey = btn.getAttribute('data-apt-inv');
+      if (invKey === 'Other') {
+        if (isChecked) {
+          otherContainer.style.display = 'flex';
+          otherInput.focus();
+        } else {
+          otherContainer.style.display = 'none';
+          otherInput.value = '';
+          otherError.style.display = 'none';
+        }
+      }
+    });
+
+    otherInput.addEventListener('input', () => {
+      if (otherInput.value.trim()) {
+        otherError.style.display = 'none';
+      }
+    });
+
+    tcaInput.addEventListener('input', () => {
+      const tcaVal = tcaInput.value;
+      if (!this.isBloodDateManuallyEdited && tcaVal) {
+        const suggested = getOneMonthBeforeISO(tcaVal);
+        bloodInput.value = suggested;
+      }
+      this.validateBloodDate();
+    });
+
+    bloodInput.addEventListener('input', () => {
+      this.isBloodDateManuallyEdited = true;
+      this.validateBloodDate();
+    });
+
+    this.overlayEl.addEventListener('click', (e) => {
+      const target = e.target               ;
+      if (target === this.overlayEl || target.closest('[data-action="close"]')) {
+        this.close();
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.isOpen()) {
+        this.close();
+      }
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await this.handleFormSubmit();
+    });
+  }
+
+          validateBloodDate()          {
+    const tcaInput = this.overlayEl.querySelector('#apt-field-tca')                    ;
+    const bloodInput = this.overlayEl.querySelector('#apt-field-blood-date')                    ;
+    const errorBlood = this.overlayEl.querySelector('#apt-error-blood-date')               ;
+
+    if (tcaInput.value && bloodInput.value && bloodInput.value > tcaInput.value) {
+      errorBlood.style.display = 'block';
+      return false;
+    }
+    errorBlood.style.display = 'none';
+    return true;
+  }
+
+          getSelectedInvestigations()           {
+    const checkedBtns = this.overlayEl.querySelectorAll('.chip-checkbox.is-checked');
+    const result           = [];
+    checkedBtns.forEach(btn => {
+      const key = btn.getAttribute('data-apt-inv');
+      if (key) result.push(key);
+    });
+    return result;
+  }
+
+          setSelectedInvestigations(investigations           = [])       {
+    const chipsContainer = this.overlayEl.querySelector('#apt-chips-investigations')               ;
+    const otherContainer = this.overlayEl.querySelector('#apt-container-blood-other')               ;
+    const set = new Set(investigations);
+
+    chipsContainer.querySelectorAll('.chip-checkbox').forEach(btn => {
+      const key = btn.getAttribute('data-apt-inv') || '';
+      const isChecked = set.has(key);
+      btn.classList.toggle('is-checked', isChecked);
+      btn.setAttribute('aria-checked', isChecked ? 'true' : 'false');
+    });
+
+    otherContainer.style.display = set.has('Other') ? 'flex' : 'none';
+  }
+
+          async handleFormSubmit()                {
+    const tcaInput = this.overlayEl.querySelector('#apt-field-tca')                    ;
+    const bloodInput = this.overlayEl.querySelector('#apt-field-blood-date')                    ;
+    const otherInput = this.overlayEl.querySelector('#apt-field-blood-other')                    ;
+    const planInput = this.overlayEl.querySelector('#apt-field-plan')                       ;
+    const notesInput = this.overlayEl.querySelector('#apt-field-notes')                    ;
+
+    const errorTca = this.overlayEl.querySelector('#apt-error-tca')               ;
+    const errorOther = this.overlayEl.querySelector('#apt-error-blood-other')               ;
+
+    let hasError = false;
+
+    if (!tcaInput.value.trim()) {
+      errorTca.style.display = 'block';
+      hasError = true;
+    } else {
+      errorTca.style.display = 'none';
+    }
+
+    if (!this.validateBloodDate()) {
+      hasError = true;
+    }
+
+    const selectedInvs = this.getSelectedInvestigations();
+    if (selectedInvs.includes('Other')) {
+      if (!otherInput.value.trim()) {
+        errorOther.style.display = 'block';
+        hasError = true;
+      } else {
+        errorOther.style.display = 'none';
+      }
+    } else {
+      errorOther.style.display = 'none';
+    }
+
+    if (hasError) {
+      if (!tcaInput.value.trim()) {
+        tcaInput.focus();
+      } else if (selectedInvs.includes('Other') && !otherInput.value.trim()) {
+        otherInput.focus();
+      } else {
+        bloodInput.focus();
+      }
+      return;
+    }
+
+    const saveBtn = this.overlayEl.querySelector('#btn-save-apt')                     ;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    try {
+      if (this.onSaveCallback) {
+        await this.onSaveCallback({
+          tcaDate: tcaInput.value.trim(),
+          bloodInvestigationDate: bloodInput.value || undefined,
+          bloodInvestigations: selectedInvs,
+          bloodOther: selectedInvs.includes('Other') && otherInput.value.trim() ? otherInput.value.trim() : undefined,
+          plan: planInput.value.trim() || undefined,
+          notes: notesInput.value.trim() || undefined
+        });
+      }
+      this.close();
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Appointment';
+    }
+  }
+
+         open(
+    patient               ,
+    mode                      ,
+    targetAppointment                       ,
+    onSave                                                   ,
+    triggerEl              
+  )       {
+    this.patient = patient;
+    this.mode = mode;
+    this.targetAppointment = targetAppointment;
+    this.onSaveCallback = onSave;
+    this.previousActiveElement = triggerEl || (document.activeElement               );
+
+    const titleEl = this.overlayEl.querySelector('#apt-modal-title')               ;
+    const patientNameEl = this.overlayEl.querySelector('#apt-patient-name')               ;
+    const rescheduleNotice = this.overlayEl.querySelector('#apt-reschedule-notice')               ;
+    const tcaInput = this.overlayEl.querySelector('#apt-field-tca')                    ;
+    const bloodInput = this.overlayEl.querySelector('#apt-field-blood-date')                    ;
+    const otherInput = this.overlayEl.querySelector('#apt-field-blood-other')                    ;
+    const planInput = this.overlayEl.querySelector('#apt-field-plan')                       ;
+    const notesInput = this.overlayEl.querySelector('#apt-field-notes')                    ;
+
+    patientNameEl.textContent = `${patient.name} (${patient.icNumber})`;
+
+    if (mode === 'reschedule') {
+      titleEl.textContent = 'Reschedule Appointment';
+      rescheduleNotice.style.display = 'block';
+      tcaInput.value = '';
+      bloodInput.value = '';
+      otherInput.value = targetAppointment?.bloodOther || '';
+      planInput.value = targetAppointment?.plan || '';
+      notesInput.value = targetAppointment ? `Rescheduled from ${targetAppointment.tcaDate}` : '';
+      this.setSelectedInvestigations(targetAppointment?.bloodInvestigations || []);
+      this.isBloodDateManuallyEdited = false;
+    } else if (mode === 'edit' && targetAppointment) {
+      titleEl.textContent = 'Edit Appointment';
+      rescheduleNotice.style.display = 'none';
+      tcaInput.value = targetAppointment.tcaDate;
+      bloodInput.value = targetAppointment.bloodInvestigationDate || '';
+      otherInput.value = targetAppointment.bloodOther || '';
+      planInput.value = targetAppointment.plan || '';
+      notesInput.value = targetAppointment.notes || '';
+      this.setSelectedInvestigations(targetAppointment.bloodInvestigations || []);
+      this.isBloodDateManuallyEdited = Boolean(targetAppointment.bloodInvestigationDate);
+    } else {
+      titleEl.textContent = 'Schedule New TCA';
+      rescheduleNotice.style.display = 'none';
+      tcaInput.value = '';
+      bloodInput.value = '';
+      otherInput.value = '';
+      planInput.value = patient.plan || '';
+      notesInput.value = '';
+      this.setSelectedInvestigations(patient.bloodInvestigations || []);
+      this.isBloodDateManuallyEdited = false;
+    }
+
+    document.body.classList.add('modal-open');
+    this.overlayEl.classList.add('is-open');
+
+    window.setTimeout(() => {
+      tcaInput.focus();
+    }, 100);
+  }
+
+         close()       {
+    if (!this.isOpen()) return;
+    document.body.classList.remove('modal-open');
+    this.overlayEl.classList.remove('is-open');
+
+    if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
+      this.previousActiveElement.focus();
+    }
+  }
+
+         isOpen()          {
+    return this.overlayEl.classList.contains('is-open');
   }
 }
 
 
   // --- Module: components/details-modal ---
-                                              
+                                                                                              
 function escapeHTML(str        )         {
   return str
     .replace(/&/g, '&amp;')
@@ -2317,11 +3088,20 @@ function escapeHTML(str        )         {
     .replace(/'/g, '&#39;');
 }
 
+                                       
+                                          
+                                            
+                                                                       
+                                                                              
+                                                 
+                                                                                
+                                                                                                          
+ 
+
 class DetailsModal {
           overlayEl             ;
           currentRecord                       = null;
-          onEditCallback                                           = null;
-          onDeleteCallback                                           = null;
+          handlers                              = null;
           previousActiveElement                     = null;
 
   constructor() {
@@ -2332,7 +3112,7 @@ class DetailsModal {
     this.overlayEl.setAttribute('aria-label', 'Patient Profile');
 
     this.overlayEl.innerHTML = `
-      <div class="bottom-sheet profile-modal">
+      <div class="bottom-sheet profile-modal" style="max-width: 620px;">
         <div class="sheet-grab-bar"></div>
         <div class="sheet-header">
           <span class="sheet-title">Patient Profile</span>
@@ -2344,11 +3124,14 @@ class DetailsModal {
           </button>
         </div>
         <div class="sheet-body" id="details-content"></div>
-        <div class="sheet-footer" style="justify-content: space-between;">
-          <button type="button" id="btn-delete-record" class="btn-destructive">Delete</button>
-          <div style="display: flex; gap: 8px;">
+        <div class="sheet-footer profile-footer-actions">
+          <div class="footer-left-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="btn-toggle-deactivate" class="btn-secondary" style="font-weight: 500; font-size: 13.5px;"></button>
+            <button type="button" id="btn-delete-record" class="btn-destructive" style="font-size: 13.5px;">Delete</button>
+          </div>
+          <div class="footer-right-actions" style="display: flex; gap: 8px;">
             <button type="button" class="btn-secondary" data-action="close">Close</button>
-            <button type="button" id="btn-edit-record" class="btn-primary">Edit</button>
+            <button type="button" id="btn-edit-record" class="btn-primary">Edit Patient</button>
           </div>
         </div>
       </div>
@@ -2361,6 +3144,7 @@ class DetailsModal {
           bindEvents()       {
     const editBtn = this.overlayEl.querySelector('#btn-edit-record')                     ;
     const deleteBtn = this.overlayEl.querySelector('#btn-delete-record')                     ;
+    const deactivateBtn = this.overlayEl.querySelector('#btn-toggle-deactivate')                     ;
 
     this.overlayEl.addEventListener('click', (e) => {
       const target = e.target               ;
@@ -2376,59 +3160,86 @@ class DetailsModal {
     });
 
     editBtn.addEventListener('click', () => {
-      if (this.currentRecord && this.onEditCallback) {
+      if (this.currentRecord && this.handlers) {
         const rec = this.currentRecord;
         this.close();
-        this.onEditCallback(rec);
+        this.handlers.onEdit(rec);
       }
     });
 
     deleteBtn.addEventListener('click', () => {
-      if (this.currentRecord && this.onDeleteCallback) {
-        const rec = this.currentRecord;
-        this.onDeleteCallback(rec);
+      if (this.currentRecord && this.handlers) {
+        this.handlers.onDelete(this.currentRecord);
+      }
+    });
+
+    deactivateBtn.addEventListener('click', () => {
+      if (this.currentRecord && this.handlers) {
+        const isCurrentlyActive = this.currentRecord.isActive !== false;
+        this.handlers.onToggleActive(this.currentRecord, !isCurrentlyActive);
       }
     });
   }
 
          open(
     record               ,
-    onEdit                                 ,
-    onDelete                                 ,
+    handlers                      ,
     triggerEl              
   )       {
     this.currentRecord = record;
-    this.onEditCallback = onEdit;
-    this.onDeleteCallback = onDelete;
+    this.handlers = handlers;
     this.previousActiveElement = triggerEl || (document.activeElement               );
 
-    const contentEl = this.overlayEl.querySelector('#details-content')               ;
-    const tcaStatus = getTCAStatus(record.nextTca);
+    const deactivateBtn = this.overlayEl.querySelector('#btn-toggle-deactivate')                     ;
+    const isCurrentlyActive = record.isActive !== false;
+    deactivateBtn.textContent = isCurrentlyActive ? 'Deactivate Patient' : 'Reactivate Patient';
 
-    let tcaBadgeHtml = '';
-    if (tcaStatus.type !== 'none') {
-      tcaBadgeHtml = `
-        <div class="tca-indicator tca-${tcaStatus.type}">
-          <span class="tca-dot"></span>
-          <span>${escapeHTML(tcaStatus.label)}</span>
+    this.renderProfileContent();
+    document.body.classList.add('modal-open');
+    this.overlayEl.classList.add('is-open');
+  }
+
+         updateRecord(record               )       {
+    this.currentRecord = record;
+    const deactivateBtn = this.overlayEl.querySelector('#btn-toggle-deactivate')                     ;
+    const isCurrentlyActive = record.isActive !== false;
+    deactivateBtn.textContent = isCurrentlyActive ? 'Deactivate Patient' : 'Reactivate Patient';
+    this.renderProfileContent();
+  }
+
+          renderProfileContent()       {
+    if (!this.currentRecord) return;
+    const record = this.currentRecord;
+    const contentEl = this.overlayEl.querySelector('#details-content')               ;
+
+    const isCurrentlyActive = record.isActive !== false;
+    const isNew = record.patientType === 'New';
+
+    // Status Banner (Active/Inactive)
+    let activeBannerHtml = '';
+    if (!isCurrentlyActive) {
+      activeBannerHtml = `
+        <div class="deactivated-patient-banner">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+          </svg>
+          <div>
+            <strong>Patient Record Deactivated</strong>
+            <div style="font-size: 12.5px; opacity: 0.9;">All medical history, appointments, and investigations remain safely preserved.</div>
+          </div>
         </div>
       `;
     }
 
-    const tcaFormatted = record.nextTca ? formatDisplayDate(record.nextTca) : 'No TCA scheduled';
+    // Patient Category Badge & Toggle Button
+    const categoryTag = isNew
+      ? `<span class="patient-type-pill pill-new">New Patient</span>`
+      : `<span class="patient-type-pill pill-existing">Existing Patient</span>`;
 
-    // Blood Date formatting & status
-    let bloodFormatted = 'None';
-    let bloodBadgeHtml = '';
-    if (record.bloodInvestigationDate) {
-      bloodFormatted = formatDisplayDate(record.bloodInvestigationDate);
-      const isPast = isDatePast(record.bloodInvestigationDate);
-      const hasWork = (record.bloodInvestigations && record.bloodInvestigations.length > 0) || Boolean(record.plan && record.plan.trim());
-      if (isPast && hasWork) {
-        bloodBadgeHtml = `<span class="blood-status-note overdue" style="margin-left: 6px;">(Overdue)</span>`;
-      }
-    }
+    const switchCategoryLabel = isNew ? 'Switch to Existing Patient' : 'Switch to New Patient';
 
+    // Phone link
     const phoneLink = record.phone
       ? `<a href="tel:${escapeHTML(record.phone)}" class="profile-tel-link">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2438,38 +3249,250 @@ class DetailsModal {
          </a>`
       : '<span style="color: var(--color-text-tertiary); font-style: italic;">None</span>';
 
-    // Blood investigations display
-    let investigationsDisplay = '<span style="color: var(--color-text-tertiary); font-style: italic;">None selected</span>';
-    if (record.bloodInvestigations && record.bloodInvestigations.length > 0) {
-      const chips = record.bloodInvestigations.map(inv => {
-        const text = inv === 'Other' && record.bloodOther ? `Other: ${record.bloodOther}` : inv;
-        return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHTML(text)}</span>`;
-      }).join('');
-      investigationsDisplay = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
+    // Appointments parsing: Upcoming (Scheduled) vs History (Attended, DNA, Rescheduled, Cancelled)
+    const appointments                   = Array.isArray(record.appointments) ? record.appointments : [];
+    const scheduledApts = appointments.filter(a => a.status === 'Scheduled');
+    const historicalApts = appointments.filter(a => a.status !== 'Scheduled').sort((a, b) => b.tcaDate.localeCompare(a.tcaDate));
+
+    // Sort scheduled appointments (earliest first)
+    scheduledApts.sort((a, b) => a.tcaDate.localeCompare(b.tcaDate));
+    const nextApt = scheduledApts.length > 0 ? scheduledApts[0] : null;
+
+    // SECTION A: Upcoming TCA HTML
+    let upcomingSectionHtml = '';
+    if (nextApt) {
+      const tcaStatus = getTCAStatus(nextApt.tcaDate);
+      const isOverdue = tcaStatus.type === 'overdue';
+      const formattedDate = formatDisplayDate(nextApt.tcaDate);
+
+      // Overdue alert banner if required
+      let overdueBanner = '';
+      if (isOverdue) {
+        overdueBanner = `
+          <div class="overdue-action-required-banner">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span><strong>Overdue Appointment: Action Required.</strong> Record patient attendance, mark DNA, or reschedule.</span>
+          </div>
+        `;
+      }
+
+      // Blood date
+      let bloodFormatted = 'None';
+      let bloodBadgeHtml = '';
+      if (nextApt.bloodInvestigationDate) {
+        bloodFormatted = formatDisplayDate(nextApt.bloodInvestigationDate);
+        if (isDatePast(nextApt.bloodInvestigationDate)) {
+          bloodBadgeHtml = `<span class="blood-status-note overdue" style="margin-left: 6px;">(Overdue)</span>`;
+        }
+      }
+
+      // Blood investigations
+      let invsHtml = '<span style="color: var(--color-text-tertiary); font-style: italic;">None selected</span>';
+      if (nextApt.bloodInvestigations && nextApt.bloodInvestigations.length > 0) {
+        const chips = nextApt.bloodInvestigations.map(inv => {
+          const text = inv === 'Other' && nextApt.bloodOther ? `Other: ${nextApt.bloodOther}` : inv;
+          return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHTML(text)}</span>`;
+        }).join('');
+        invsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
+      }
+
+      // Plan & notes
+      const planHtml = nextApt.plan && nextApt.plan.trim()
+        ? `<div class="detail-plan-box">${escapeHTML(nextApt.plan)}</div>`
+        : '<span style="color: var(--color-text-tertiary); font-style: italic;">No specific plan recorded</span>';
+
+      const notesHtml = nextApt.notes && nextApt.notes.trim()
+        ? `<div style="font-size: 13px; color: var(--color-text-secondary); margin-top: 4px;"><em>Note: ${escapeHTML(nextApt.notes)}</em></div>`
+        : '';
+
+      upcomingSectionHtml = `
+        <div class="profile-section-card upcoming-tca-card ${isOverdue ? 'has-overdue' : ''}">
+          <div class="profile-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+            <span>A. Upcoming Scheduled TCA</span>
+            <span class="appointment-status-badge badge-scheduled">Scheduled</span>
+          </div>
+          ${overdueBanner}
+          <div class="profile-row-item">
+            <span class="profile-row-label">Appointment Date</span>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="profile-row-value" style="font-size: 16px; font-weight: 700;">${formattedDate}</span>
+              <div class="tca-indicator tca-${tcaStatus.type}">
+                <span class="tca-dot"></span>
+                <span>${escapeHTML(tcaStatus.label)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="profile-row-item">
+            <span class="profile-row-label">Blood Investigation Date</span>
+            <div style="display: flex; align-items: center;">
+              <span class="profile-row-value">${bloodFormatted}</span>
+              ${bloodBadgeHtml}
+            </div>
+          </div>
+          <div class="profile-row-item" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+            <span class="profile-row-label">Investigations to Perform:</span>
+            ${invsHtml}
+          </div>
+          <div class="profile-row-item" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+            <span class="profile-row-label">Follow-up Plan:</span>
+            ${planHtml}
+            ${notesHtml}
+          </div>
+
+          <!-- Upcoming Action Buttons -->
+          <div class="upcoming-tca-actions">
+            <button type="button" class="btn-action-attended" data-action="mark-attended" data-apt-id="${nextApt.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Mark Attended
+            </button>
+            <button type="button" class="btn-action-dna" data-action="mark-dna" data-apt-id="${nextApt.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+              Mark DNA
+            </button>
+            <button type="button" class="btn-action-reschedule" data-action="reschedule" data-apt-id="${nextApt.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+              Reschedule
+            </button>
+            <button type="button" class="btn-action-cancel" data-action="cancel" data-apt-id="${nextApt.id}">
+              Cancel
+            </button>
+          </div>
+
+          <div style="margin-top: 12px; text-align: right;">
+            <button type="button" id="btn-create-extra-tca" class="btn-secondary" style="font-size: 13px; padding: 6px 12px;">
+              + Schedule Another Appointment
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      upcomingSectionHtml = `
+        <div class="profile-section-card upcoming-tca-card">
+          <div class="profile-section-title">A. Upcoming Scheduled TCA</div>
+          <div style="padding: 16px; text-align: center; color: var(--color-text-secondary); background-color: var(--color-bg-secondary); border-radius: var(--radius-md);">
+            <p style="font-size: 14.5px; font-weight: 500; margin-bottom: 6px;">No Upcoming TCA Scheduled</p>
+            <p style="font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 12px;">Patient does not have an active scheduled appointment.</p>
+            <button type="button" id="btn-schedule-new-tca" class="btn-primary" style="font-size: 14px; padding: 8px 18px;">
+              + Schedule TCA Appointment
+            </button>
+          </div>
+        </div>
+      `;
     }
 
-    // Plan display
-    const planDisplay = record.plan && record.plan.trim()
-      ? `<div class="detail-plan-box">${escapeHTML(record.plan)}</div>`
-      : '<span style="color: var(--color-text-tertiary); font-style: italic;">No clinical plan recorded</span>';
+    // SECTION B: TCA History HTML
+    let historyItemsHtml = '';
+    if (historicalApts.length > 0) {
+      historyItemsHtml = historicalApts.map(apt => {
+        const formattedDate = formatDisplayDate(apt.tcaDate);
+        let statusClass = 'badge-cancelled';
+        if (apt.status === 'Attended') statusClass = 'badge-attended';
+        else if (apt.status === 'DNA') statusClass = 'badge-dna';
+        else if (apt.status === 'Rescheduled') statusClass = 'badge-rescheduled';
 
-    const typeTag = record.patientType === 'New'
-      ? `<span class="patient-type-pill pill-new">New Patient</span>`
-      : `<span class="patient-type-pill pill-existing">Existing Patient</span>`;
+        let reschedNotice = '';
+        if (apt.status === 'Rescheduled' && apt.rescheduledToAppointmentId) {
+          reschedNotice = `<span style="font-size: 12px; color: var(--color-accent); font-weight: 500;">(Rescheduled to new date)</span>`;
+        }
+
+        let bloodInfo = '';
+        if (apt.bloodInvestigationDate) {
+          bloodInfo = `<div style="font-size: 13px; margin-top: 4px;"><strong>Blood Date:</strong> ${formatDisplayDate(apt.bloodInvestigationDate)}</div>`;
+        }
+
+        let invsChips = '';
+        if (apt.bloodInvestigations && apt.bloodInvestigations.length > 0) {
+          const chips = apt.bloodInvestigations.map(inv => {
+            const text = inv === 'Other' && apt.bloodOther ? `Other: ${apt.bloodOther}` : inv;
+            return `<span class="mini-chip" style="font-size: 11.5px; padding: 2px 7px;">${escapeHTML(text)}</span>`;
+          }).join('');
+          invsChips = `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">${chips}</div>`;
+        }
+
+        let planText = '';
+        if (apt.plan && apt.plan.trim()) {
+          planText = `<div style="font-size: 13px; color: var(--color-text-primary); margin-top: 5px; background-color: var(--color-bg-secondary); padding: 6px 10px; border-radius: var(--radius-sm);">${escapeHTML(apt.plan)}</div>`;
+        }
+
+        let notesText = '';
+        if (apt.notes && apt.notes.trim()) {
+          notesText = `<div style="font-size: 12.5px; color: var(--color-text-tertiary); margin-top: 4px;"><em>Notes: ${escapeHTML(apt.notes)}</em></div>`;
+        }
+
+        return `
+          <div class="tca-history-item">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="tca-history-date">${formattedDate}</span>
+                ${reschedNotice}
+              </div>
+              <span class="appointment-status-badge ${statusClass}">${apt.status}</span>
+            </div>
+            ${bloodInfo}
+            ${invsChips}
+            ${planText}
+            ${notesText}
+          </div>
+        `;
+      }).join('');
+    } else {
+      historyItemsHtml = `
+        <div style="padding: 14px; text-align: center; color: var(--color-text-tertiary); font-style: italic; font-size: 13.5px;">
+          No previous appointment history recorded for this patient.
+        </div>
+      `;
+    }
+
+    const historySectionHtml = `
+      <div class="profile-section-card">
+        <div class="profile-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+          <span>B. TCA History (${historicalApts.length} past records)</span>
+        </div>
+        <div class="tca-history-list">
+          ${historyItemsHtml}
+        </div>
+      </div>
+    `;
 
     contentEl.innerHTML = `
       <div class="profile-group-wrapper">
+        ${activeBannerHtml}
+
         <!-- Header Section -->
         <div class="profile-header-card">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
-            <h2 class="profile-patient-name">${escapeHTML(record.name)}</h2>
-            ${typeTag}
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+            <div>
+              <h2 class="profile-patient-name">${escapeHTML(record.name)}</h2>
+              <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                ${categoryTag}
+                <button type="button" id="btn-switch-category" class="btn-text-action" style="font-size: 12.5px; color: var(--color-accent); text-decoration: underline; background: none; border: none; cursor: pointer; padding: 2px;">
+                  ${switchCategoryLabel}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Section 1: Identification & Contact -->
+        <!-- Section: Identification & Contact -->
         <div class="profile-section-card">
-          <div class="profile-section-title">Identification & Contact</div>
+          <div class="profile-section-title">Patient Identification & Contact</div>
+          <div class="profile-row-item">
+            <span class="profile-row-label">Patient ID</span>
+            <span class="profile-row-value monospace" style="font-size: 13px; color: var(--color-text-secondary);">${escapeHTML(record.id)}</span>
+          </div>
           <div class="profile-row-item">
             <span class="profile-row-label">IC Number</span>
             <span class="profile-row-value monospace">${escapeHTML(record.icNumber)}</span>
@@ -2480,44 +3503,58 @@ class DetailsModal {
           </div>
         </div>
 
-        <!-- Section 2: Appointments & Investigations -->
-        <div class="profile-section-card">
-          <div class="profile-section-title">Appointments & Investigations</div>
-          <div class="profile-row-item">
-            <span class="profile-row-label">Next TCA</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="profile-row-value" style="font-weight: 600;">${tcaFormatted}</span>
-              ${tcaBadgeHtml}
-            </div>
-          </div>
-          <div class="profile-row-item">
-            <span class="profile-row-label">Blood Date</span>
-            <div style="display: flex; align-items: center;">
-              <span class="profile-row-value">${bloodFormatted}</span>
-              ${bloodBadgeHtml}
-            </div>
-          </div>
-        </div>
+        <!-- Section A: Upcoming Scheduled TCA -->
+        ${upcomingSectionHtml}
 
-        <!-- Section 3: Blood Investigations -->
-        <div class="profile-section-card">
-          <div class="profile-section-title">Blood Investigations</div>
-          ${investigationsDisplay}
-        </div>
-
-        <!-- Section 4: Clinical Plan -->
-        <div class="profile-section-card">
-          <div class="profile-section-title">Plan</div>
-          ${planDisplay}
-        </div>
+        <!-- Section B: TCA History -->
+        ${historySectionHtml}
       </div>
     `;
 
-    this.overlayEl.classList.add('is-open');
+    // Wire up buttons inside profile
+    contentEl.querySelector('#btn-switch-category')?.addEventListener('click', () => {
+      if (this.currentRecord && this.handlers) {
+        const newCategory              = this.currentRecord.patientType === 'New' ? 'Existing' : 'New';
+        this.handlers.onChangeCategory(this.currentRecord, newCategory);
+      }
+    });
+
+    contentEl.querySelector('#btn-schedule-new-tca')?.addEventListener('click', () => {
+      if (this.currentRecord && this.handlers) {
+        this.handlers.onScheduleTca(this.currentRecord);
+      }
+    });
+
+    contentEl.querySelector('#btn-create-extra-tca')?.addEventListener('click', () => {
+      if (this.currentRecord && this.handlers) {
+        this.handlers.onScheduleTca(this.currentRecord);
+      }
+    });
+
+    // Upcoming action buttons
+    contentEl.querySelectorAll('[data-action]').forEach(btn => {
+      const action = btn.getAttribute('data-action');
+      const aptId = btn.getAttribute('data-apt-id');
+      if (!action || !aptId || !nextApt) return;
+
+      btn.addEventListener('click', () => {
+        if (!this.currentRecord || !this.handlers) return;
+        if (action === 'mark-attended') {
+          this.handlers.onUpdateStatus(this.currentRecord, nextApt, 'Attended');
+        } else if (action === 'mark-dna') {
+          this.handlers.onUpdateStatus(this.currentRecord, nextApt, 'DNA');
+        } else if (action === 'reschedule') {
+          this.handlers.onRescheduleTca(this.currentRecord, nextApt);
+        } else if (action === 'cancel') {
+          this.handlers.onUpdateStatus(this.currentRecord, nextApt, 'Cancelled');
+        }
+      });
+    });
   }
 
          close()       {
     if (!this.isOpen()) return;
+    document.body.classList.remove('modal-open');
     this.overlayEl.classList.remove('is-open');
 
     if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
@@ -3181,6 +4218,7 @@ class App {
           detailsModal               ;
           sortSheet            ;
           dataModal            ;
+          appointmentModal                   ;
 
           recordCountEl              ;
           sortTriggerEl                    ;
@@ -3198,6 +4236,7 @@ class App {
     this.detailsModal = new DetailsModal();
     this.sortSheet = new SortSheet();
     this.dataModal = new DataModal();
+    this.appointmentModal = new AppointmentModal();
 
     // 3. Initialize navigation bar
     this.navBar = new NavigationBar(this.activeTab, (newTab) => {
@@ -3489,13 +4528,7 @@ class App {
     if (this.activeTab === 'records') {
       const sorted = sortRecords(filtered, this.currentSort);
       for (const record of sorted) {
-        const cardEl = createRecordCard(record, () => {
-          this.detailsModal.open(
-            record,
-            (recToEdit) => this.recordModal.open(recToEdit, this.records, (saved) => this.handleSaveRecord(saved)),
-            (recToDelete) => this.handleDeleteRecord(recToDelete)
-          );
-        });
+        const cardEl = createRecordCard(record, this.buildCardActions(record));
         this.viewContainerEl.appendChild(cardEl);
       }
       return;
@@ -3504,14 +4537,42 @@ class App {
     // TAB 2: TCA Timeline View
     if (this.activeTab === 'tca') {
       const tcaViewEl = renderTCAView(filtered, (record) => {
-        this.detailsModal.open(
-          record,
-          (recToEdit) => this.recordModal.open(recToEdit, this.records, (saved) => this.handleSaveRecord(saved)),
-          (recToDelete) => this.handleDeleteRecord(recToDelete)
-        );
+        this.detailsModal.open(record, this.buildDetailsHandlers(record));
       });
       this.viewContainerEl.appendChild(tcaViewEl);
     }
+  }
+
+          buildDetailsHandlers(record               )                       {
+    return {
+      onEdit: (rec) => this.recordModal.open(rec, this.records, (saved) => this.handleSaveRecord(saved)),
+      onDelete: (rec) => this.handleDeleteRecord(rec),
+      onToggleActive: (rec, makeActive) => this.handleToggleActive(rec, makeActive),
+      onChangeCategory: (rec, newCategory) => this.handleChangeCategory(rec, newCategory),
+      onScheduleTca: (rec) => this.handleScheduleTca(rec),
+      onRescheduleTca: (rec, apt) => this.handleRescheduleTca(rec, apt),
+      onUpdateStatus: (rec, apt, status) => this.handleUpdateStatus(rec, apt, status)
+    };
+  }
+
+          buildCardActions(record               )                    {
+    return {
+      onView: () => {
+        this.detailsModal.open(record, this.buildDetailsHandlers(record));
+      },
+      onEdit: () => {
+        this.recordModal.open(record, this.records, (saved) => this.handleSaveRecord(saved));
+      },
+      onDelete: () => {
+        this.handleDeleteRecord(record);
+      },
+      onToggleActive: (makeActive) => {
+        this.handleToggleActive(record, makeActive);
+      },
+      onChangeCategory: (newCategory) => {
+        this.handleChangeCategory(record, newCategory);
+      }
+    };
   }
 
           async handleSaveRecord(
@@ -3522,32 +4583,154 @@ class App {
 
     if (isNew) {
       this.records.unshift(saved);
-      toast.show('Record added');
+      toast.show('Patient registered');
     } else {
-      const idx = this.records.findIndex(r => r.id === saved.id);
-      if (idx !== -1) {
-        this.records[idx] = saved;
-      }
-      toast.show('Record updated');
+      this.updateRecordInState(saved);
+      toast.show('Patient record updated');
     }
 
     this.renderCurrentView();
   }
 
           async handleDeleteRecord(record               )                {
-    const confirmed = await confirmSheet.show({
-      title: 'Delete Record?',
-      message: `Are you sure you want to delete the record for "${record.name}"? This action cannot be undone.`,
-      confirmLabel: 'Delete Record',
-      isDestructive: true
-    });
+    const aptCount = Array.isArray(record.appointments) ? record.appointments.length : (record.nextTca ? 1 : 0);
+    const hasHistory = aptCount > 0 || (record.bloodInvestigations && record.bloodInvestigations.length > 0);
 
-    if (confirmed) {
-      await recordStorage.delete(record.id);
-      this.records = this.records.filter(r => r.id !== record.id);
-      this.detailsModal.close();
-      toast.show('Record deleted');
-      this.renderCurrentView();
+    if (hasHistory) {
+      const choice = await confirmSheet.show({
+        title: 'Delete Patient Medical Record?',
+        message: `⚠️ Patient "${record.name}" has ${aptCount} appointment(s) and clinical investigation records in their history. Deleting will permanently remove all medical history.\n\nWe recommend deactivating the patient record instead to safely preserve medical records.`,
+        confirmLabel: 'Deactivate Instead',
+        cancelLabel: 'Delete Permanently',
+        isDestructive: false
+      });
+
+      if (choice) {
+        await this.handleToggleActive(record, false);
+        return;
+      }
+
+      const finalConfirm = await confirmSheet.show({
+        title: 'Confirm Permanent Deletion',
+        message: `Are you absolutely certain? This will PERMANENTLY erase all records, appointments, and lab history for "${record.name}". This cannot be undone.`,
+        confirmLabel: 'Permanently Erase',
+        cancelLabel: 'Keep Record',
+        isDestructive: true
+      });
+
+      if (!finalConfirm) return;
+    } else {
+      const confirmed = await confirmSheet.show({
+        title: 'Delete Patient Record?',
+        message: `Are you sure you want to delete the record for "${record.name}"? This action cannot be undone.`,
+        confirmLabel: 'Delete Record',
+        isDestructive: true
+      });
+      if (!confirmed) return;
+    }
+
+    await recordStorage.delete(record.id);
+    this.records = this.records.filter(r => r.id !== record.id);
+    this.detailsModal.close();
+    toast.show('Patient record deleted');
+    this.renderCurrentView();
+  }
+
+          async handleToggleActive(record               , makeActive         )                {
+    if (!makeActive) {
+      const confirmed = await confirmSheet.show({
+        title: 'Deactivate Patient Record?',
+        message: `Deactivate record for "${record.name}"? The patient will be marked inactive, but their complete TCA history and lab records will be preserved safely.`,
+        confirmLabel: 'Deactivate Patient',
+        cancelLabel: 'Keep Active',
+        isDestructive: false
+      });
+      if (!confirmed) return;
+    }
+
+    const updated = await recordStorage.setPatientActiveStatus(record.id, makeActive);
+    this.updateRecordInState(updated);
+    toast.show(makeActive ? 'Patient reactivated' : 'Patient deactivated');
+    this.detailsModal.updateRecord(updated);
+    this.renderCurrentView();
+  }
+
+          async handleChangeCategory(record               , newCategory             )                {
+    const updated = await recordStorage.setPatientCategory(record.id, newCategory);
+    this.updateRecordInState(updated);
+    toast.show(`Category changed to ${newCategory} Patient`);
+    this.detailsModal.updateRecord(updated);
+    this.renderCurrentView();
+  }
+
+          handleScheduleTca(record               )       {
+    this.appointmentModal.open(record, 'new', null, async (data) => {
+      await recordStorage.addAppointment(record.id, {
+        tcaDate: data.tcaDate,
+        status: 'Scheduled',
+        notes: data.notes,
+        plan: data.plan,
+        bloodInvestigationDate: data.bloodInvestigationDate,
+        bloodInvestigations: data.bloodInvestigations,
+        bloodOther: data.bloodOther
+      });
+      const updated = await recordStorage.get(record.id);
+      if (updated) {
+        this.updateRecordInState(updated);
+        this.detailsModal.updateRecord(updated);
+        this.renderCurrentView();
+      }
+      toast.show('New TCA appointment scheduled');
+    });
+  }
+
+          handleRescheduleTca(record               , appointment                )       {
+    this.appointmentModal.open(record, 'reschedule', appointment, async (data) => {
+      await recordStorage.rescheduleAppointment(record.id, appointment.id, data);
+      const updated = await recordStorage.get(record.id);
+      if (updated) {
+        this.updateRecordInState(updated);
+        this.detailsModal.updateRecord(updated);
+        this.renderCurrentView();
+      }
+      toast.show('Appointment rescheduled');
+    });
+  }
+
+          async handleUpdateStatus(
+    record               ,
+    appointment                ,
+    newStatus                   
+  )                {
+    await recordStorage.updateAppointment(record.id, appointment.id, { status: newStatus });
+    let updated = await recordStorage.get(record.id);
+    if (!updated) return;
+
+    this.updateRecordInState(updated);
+    this.detailsModal.updateRecord(updated);
+    this.renderCurrentView();
+    toast.show(`Appointment recorded as ${newStatus}`);
+
+    // If marked Attended and patient was New Patient, suggest changing to Existing Patient
+    if (newStatus === 'Attended' && updated.patientType === 'New') {
+      const shouldSwitch = await confirmSheet.show({
+        title: 'Update Patient Category?',
+        message: `First visit recorded as Attended for "${updated.name}". Would you like to change their category to "Existing Patient"?`,
+        confirmLabel: 'Update to Existing Patient',
+        cancelLabel: 'Keep as New Patient',
+        isDestructive: false
+      });
+
+      if (shouldSwitch) {
+        await this.handleChangeCategory(updated, 'Existing');
+      }
+    }
+  }
+
+          updateRecordInState(updated               )       {
+    const idx = this.records.findIndex(r => r.id === updated.id);
+    if (idx !== -1) {
+      this.records[idx] = updated;
     }
   }
 

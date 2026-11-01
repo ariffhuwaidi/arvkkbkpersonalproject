@@ -5,11 +5,12 @@ import { filterRecords } from './utils/search.js';
 import { generateDemoRecords } from './utils/demo-data.js';
 
 import { createHeader } from './components/header.js';
-import { createRecordCard } from './components/record-card.js';
+import { createRecordCard, RecordCardActions } from './components/record-card.js';
 import { RecordModal } from './components/record-modal.js';
-import { DetailsModal } from './components/details-modal.js';
+import { DetailsModal, DetailsModalHandlers } from './components/details-modal.js';
 import { SortSheet } from './components/sort-sheet.js';
 import { DataModal } from './components/data-modal.js';
+import { AppointmentModal } from './components/appointment-modal.js';
 import { confirmSheet } from './components/confirm-sheet.js';
 import { toast } from './components/toast.js';
 import { NavigationBar, getSavedTab } from './components/nav-bar.js';
@@ -27,6 +28,7 @@ class App {
           detailsModal               ;
           sortSheet            ;
           dataModal            ;
+          appointmentModal                   ;
 
           recordCountEl              ;
           sortTriggerEl                    ;
@@ -44,6 +46,7 @@ class App {
     this.detailsModal = new DetailsModal();
     this.sortSheet = new SortSheet();
     this.dataModal = new DataModal();
+    this.appointmentModal = new AppointmentModal();
 
     // 3. Initialize navigation bar
     this.navBar = new NavigationBar(this.activeTab, (newTab) => {
@@ -335,13 +338,7 @@ class App {
     if (this.activeTab === 'records') {
       const sorted = sortRecords(filtered, this.currentSort);
       for (const record of sorted) {
-        const cardEl = createRecordCard(record, () => {
-          this.detailsModal.open(
-            record,
-            (recToEdit) => this.recordModal.open(recToEdit, this.records, (saved) => this.handleSaveRecord(saved)),
-            (recToDelete) => this.handleDeleteRecord(recToDelete)
-          );
-        });
+        const cardEl = createRecordCard(record, this.buildCardActions(record));
         this.viewContainerEl.appendChild(cardEl);
       }
       return;
@@ -350,14 +347,42 @@ class App {
     // TAB 2: TCA Timeline View
     if (this.activeTab === 'tca') {
       const tcaViewEl = renderTCAView(filtered, (record) => {
-        this.detailsModal.open(
-          record,
-          (recToEdit) => this.recordModal.open(recToEdit, this.records, (saved) => this.handleSaveRecord(saved)),
-          (recToDelete) => this.handleDeleteRecord(recToDelete)
-        );
+        this.detailsModal.open(record, this.buildDetailsHandlers(record));
       });
       this.viewContainerEl.appendChild(tcaViewEl);
     }
+  }
+
+          buildDetailsHandlers(record               )                       {
+    return {
+      onEdit: (rec) => this.recordModal.open(rec, this.records, (saved) => this.handleSaveRecord(saved)),
+      onDelete: (rec) => this.handleDeleteRecord(rec),
+      onToggleActive: (rec, makeActive) => this.handleToggleActive(rec, makeActive),
+      onChangeCategory: (rec, newCategory) => this.handleChangeCategory(rec, newCategory),
+      onScheduleTca: (rec) => this.handleScheduleTca(rec),
+      onRescheduleTca: (rec, apt) => this.handleRescheduleTca(rec, apt),
+      onUpdateStatus: (rec, apt, status) => this.handleUpdateStatus(rec, apt, status)
+    };
+  }
+
+          buildCardActions(record               )                    {
+    return {
+      onView: () => {
+        this.detailsModal.open(record, this.buildDetailsHandlers(record));
+      },
+      onEdit: () => {
+        this.recordModal.open(record, this.records, (saved) => this.handleSaveRecord(saved));
+      },
+      onDelete: () => {
+        this.handleDeleteRecord(record);
+      },
+      onToggleActive: (makeActive) => {
+        this.handleToggleActive(record, makeActive);
+      },
+      onChangeCategory: (newCategory) => {
+        this.handleChangeCategory(record, newCategory);
+      }
+    };
   }
 
           async handleSaveRecord(
@@ -368,32 +393,154 @@ class App {
 
     if (isNew) {
       this.records.unshift(saved);
-      toast.show('Record added');
+      toast.show('Patient registered');
     } else {
-      const idx = this.records.findIndex(r => r.id === saved.id);
-      if (idx !== -1) {
-        this.records[idx] = saved;
-      }
-      toast.show('Record updated');
+      this.updateRecordInState(saved);
+      toast.show('Patient record updated');
     }
 
     this.renderCurrentView();
   }
 
           async handleDeleteRecord(record               )                {
-    const confirmed = await confirmSheet.show({
-      title: 'Delete Record?',
-      message: `Are you sure you want to delete the record for "${record.name}"? This action cannot be undone.`,
-      confirmLabel: 'Delete Record',
-      isDestructive: true
-    });
+    const aptCount = Array.isArray(record.appointments) ? record.appointments.length : (record.nextTca ? 1 : 0);
+    const hasHistory = aptCount > 0 || (record.bloodInvestigations && record.bloodInvestigations.length > 0);
 
-    if (confirmed) {
-      await recordStorage.delete(record.id);
-      this.records = this.records.filter(r => r.id !== record.id);
-      this.detailsModal.close();
-      toast.show('Record deleted');
-      this.renderCurrentView();
+    if (hasHistory) {
+      const choice = await confirmSheet.show({
+        title: 'Delete Patient Medical Record?',
+        message: `⚠️ Patient "${record.name}" has ${aptCount} appointment(s) and clinical investigation records in their history. Deleting will permanently remove all medical history.\n\nWe recommend deactivating the patient record instead to safely preserve medical records.`,
+        confirmLabel: 'Deactivate Instead',
+        cancelLabel: 'Delete Permanently',
+        isDestructive: false
+      });
+
+      if (choice) {
+        await this.handleToggleActive(record, false);
+        return;
+      }
+
+      const finalConfirm = await confirmSheet.show({
+        title: 'Confirm Permanent Deletion',
+        message: `Are you absolutely certain? This will PERMANENTLY erase all records, appointments, and lab history for "${record.name}". This cannot be undone.`,
+        confirmLabel: 'Permanently Erase',
+        cancelLabel: 'Keep Record',
+        isDestructive: true
+      });
+
+      if (!finalConfirm) return;
+    } else {
+      const confirmed = await confirmSheet.show({
+        title: 'Delete Patient Record?',
+        message: `Are you sure you want to delete the record for "${record.name}"? This action cannot be undone.`,
+        confirmLabel: 'Delete Record',
+        isDestructive: true
+      });
+      if (!confirmed) return;
+    }
+
+    await recordStorage.delete(record.id);
+    this.records = this.records.filter(r => r.id !== record.id);
+    this.detailsModal.close();
+    toast.show('Patient record deleted');
+    this.renderCurrentView();
+  }
+
+          async handleToggleActive(record               , makeActive         )                {
+    if (!makeActive) {
+      const confirmed = await confirmSheet.show({
+        title: 'Deactivate Patient Record?',
+        message: `Deactivate record for "${record.name}"? The patient will be marked inactive, but their complete TCA history and lab records will be preserved safely.`,
+        confirmLabel: 'Deactivate Patient',
+        cancelLabel: 'Keep Active',
+        isDestructive: false
+      });
+      if (!confirmed) return;
+    }
+
+    const updated = await recordStorage.setPatientActiveStatus(record.id, makeActive);
+    this.updateRecordInState(updated);
+    toast.show(makeActive ? 'Patient reactivated' : 'Patient deactivated');
+    this.detailsModal.updateRecord(updated);
+    this.renderCurrentView();
+  }
+
+          async handleChangeCategory(record               , newCategory             )                {
+    const updated = await recordStorage.setPatientCategory(record.id, newCategory);
+    this.updateRecordInState(updated);
+    toast.show(`Category changed to ${newCategory} Patient`);
+    this.detailsModal.updateRecord(updated);
+    this.renderCurrentView();
+  }
+
+          handleScheduleTca(record               )       {
+    this.appointmentModal.open(record, 'new', null, async (data) => {
+      await recordStorage.addAppointment(record.id, {
+        tcaDate: data.tcaDate,
+        status: 'Scheduled',
+        notes: data.notes,
+        plan: data.plan,
+        bloodInvestigationDate: data.bloodInvestigationDate,
+        bloodInvestigations: data.bloodInvestigations,
+        bloodOther: data.bloodOther
+      });
+      const updated = await recordStorage.get(record.id);
+      if (updated) {
+        this.updateRecordInState(updated);
+        this.detailsModal.updateRecord(updated);
+        this.renderCurrentView();
+      }
+      toast.show('New TCA appointment scheduled');
+    });
+  }
+
+          handleRescheduleTca(record               , appointment                )       {
+    this.appointmentModal.open(record, 'reschedule', appointment, async (data) => {
+      await recordStorage.rescheduleAppointment(record.id, appointment.id, data);
+      const updated = await recordStorage.get(record.id);
+      if (updated) {
+        this.updateRecordInState(updated);
+        this.detailsModal.updateRecord(updated);
+        this.renderCurrentView();
+      }
+      toast.show('Appointment rescheduled');
+    });
+  }
+
+          async handleUpdateStatus(
+    record               ,
+    appointment                ,
+    newStatus                   
+  )                {
+    await recordStorage.updateAppointment(record.id, appointment.id, { status: newStatus });
+    let updated = await recordStorage.get(record.id);
+    if (!updated) return;
+
+    this.updateRecordInState(updated);
+    this.detailsModal.updateRecord(updated);
+    this.renderCurrentView();
+    toast.show(`Appointment recorded as ${newStatus}`);
+
+    // If marked Attended and patient was New Patient, suggest changing to Existing Patient
+    if (newStatus === 'Attended' && updated.patientType === 'New') {
+      const shouldSwitch = await confirmSheet.show({
+        title: 'Update Patient Category?',
+        message: `First visit recorded as Attended for "${updated.name}". Would you like to change their category to "Existing Patient"?`,
+        confirmLabel: 'Update to Existing Patient',
+        cancelLabel: 'Keep as New Patient',
+        isDestructive: false
+      });
+
+      if (shouldSwitch) {
+        await this.handleChangeCategory(updated, 'Existing');
+      }
+    }
+  }
+
+          updateRecordInState(updated               )       {
+    const idx = this.records.findIndex(r => r.id === updated.id);
+    if (idx !== -1) {
+      this.records[idx] = updated;
     }
   }
 

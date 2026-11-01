@@ -81,6 +81,7 @@ const modulesInOrder = [
   'components/record-card',
   'components/sort-sheet',
   'components/record-modal',
+  'components/appointment-modal',
   'components/details-modal',
   'components/data-modal',
   'components/nav-bar',

@@ -1,12 +1,12 @@
 import { BLOOD_INVESTIGATION_OPTIONS } from '../types.js';
 /**
- * Creates a downloadable JSON file of current records.
+ * Creates a downloadable JSON file of current records with appointment history.
  */
 export function exportRecordsToJSON(records                 )       {
   const payload                    = {
     app: 'ARV_KKBK',
-    version: '3.0',
-    schemaVersion: 3,
+    version: '4.0',
+    schemaVersion: 4,
     exportedAt: new Date().toISOString(),
     totalRecords: records.length,
     records
@@ -34,10 +34,11 @@ export function exportRecordsToJSON(records                 )       {
  
 
 const ALLOWED_SET = new Set        (BLOOD_INVESTIGATION_OPTIONS);
+const ALLOWED_STATUSES = new Set                   (['Scheduled', 'Attended', 'DNA', 'Rescheduled', 'Cancelled']);
 
 /**
  * Validates an imported JSON string or parsed object against ARV KKBK schema.
- * Safely migrates schema version 1 and 2 records.
+ * Safely migrates schema version 1, 2, and 3 records to schema 4.
  */
 export function validateImportJSON(rawText        )                   {
   let parsed         ;
@@ -81,11 +82,14 @@ export function validateImportJSON(rawText        )                   {
       return { valid: false, error: `Record "${r.name}" is missing a required IC number.` };
     }
 
-    // Patient type: 'New' or 'Existing', defaults to 'Existing' for older files
+    // Patient type / category: 'New' or 'Existing', defaults to 'Existing'
     let patientType              = 'Existing';
     if (r.patientType === 'New' || r.patientType === 'Existing') {
       patientType = r.patientType;
     }
+
+    const isActive = r.isActive !== undefined ? Boolean(r.isActive) : true;
+    const recordId = typeof r.id === 'string' && r.id ? r.id : `imp_${Date.now()}_${i}`;
 
     // Migration for Plan: if legacy bloodInvestigationsPlan is present and plan is missing, migrate text
     let plan                     = undefined;
@@ -113,19 +117,83 @@ export function validateImportJSON(rawText        )                   {
     }
 
     const now = new Date().toISOString();
+    const createdAt = typeof r.createdAt === 'string' ? r.createdAt : now;
+    const updatedAt = typeof r.updatedAt === 'string' ? r.updatedAt : now;
+
+    // Validate or synthesize appointments array
+    let appointments                   = [];
+    if (Array.isArray(r.appointments) && r.appointments.length > 0) {
+      for (let aIdx = 0; aIdx < r.appointments.length; aIdx++) {
+        const aptRaw = r.appointments[aIdx]                           ;
+        if (!aptRaw || typeof aptRaw !== 'object') continue;
+
+        const aptInvs           = [];
+        if (Array.isArray(aptRaw.bloodInvestigations)) {
+          for (const inv of aptRaw.bloodInvestigations) {
+            if (typeof inv === 'string' && ALLOWED_SET.has(inv)) {
+              aptInvs.push(inv);
+            }
+          }
+        }
+
+        const aptOther = aptInvs.includes('Other') && typeof aptRaw.bloodOther === 'string' && aptRaw.bloodOther.trim()
+          ? aptRaw.bloodOther.trim()
+          : undefined;
+
+        let status                    = 'Scheduled';
+        if (typeof aptRaw.status === 'string' && ALLOWED_STATUSES.has(aptRaw.status                     )) {
+          status = aptRaw.status                     ;
+        }
+
+        appointments.push({
+          id: typeof aptRaw.id === 'string' && aptRaw.id ? aptRaw.id : `apt_imp_${Date.now()}_${aIdx}`,
+          patientId: recordId,
+          tcaDate: typeof aptRaw.tcaDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(aptRaw.tcaDate.trim()) ? aptRaw.tcaDate.trim() : (typeof r.nextTca === 'string' ? r.nextTca : now.slice(0, 10)),
+          status,
+          notes: typeof aptRaw.notes === 'string' && aptRaw.notes.trim() ? aptRaw.notes.trim() : undefined,
+          plan: typeof aptRaw.plan === 'string' && aptRaw.plan.trim() ? aptRaw.plan.trim() : undefined,
+          bloodInvestigationDate: typeof aptRaw.bloodInvestigationDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(aptRaw.bloodInvestigationDate.trim()) ? aptRaw.bloodInvestigationDate.trim() : undefined,
+          bloodInvestigations: aptInvs,
+          bloodOther: aptOther,
+          rescheduledToAppointmentId: typeof aptRaw.rescheduledToAppointmentId === 'string' ? aptRaw.rescheduledToAppointmentId : undefined,
+          rescheduledFromAppointmentId: typeof aptRaw.rescheduledFromAppointmentId === 'string' ? aptRaw.rescheduledFromAppointmentId : undefined,
+          attendedAt: typeof aptRaw.attendedAt === 'string' ? aptRaw.attendedAt : undefined,
+          createdAt: typeof aptRaw.createdAt === 'string' ? aptRaw.createdAt : createdAt,
+          updatedAt: typeof aptRaw.updatedAt === 'string' ? aptRaw.updatedAt : updatedAt
+        });
+      }
+    } else if (typeof r.nextTca === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.nextTca.trim())) {
+      // Migrating from older backup files with single nextTca
+      appointments.push({
+        id: `apt_migrated_${recordId}`,
+        patientId: recordId,
+        tcaDate: r.nextTca.trim(),
+        status: 'Scheduled',
+        notes: 'Migrated from backup record',
+        plan,
+        bloodInvestigationDate: typeof r.bloodInvestigationDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.bloodInvestigationDate.trim()) ? r.bloodInvestigationDate.trim() : undefined,
+        bloodInvestigations: investigations,
+        bloodOther,
+        createdAt,
+        updatedAt
+      });
+    }
+
     validRecords.push({
-      id: typeof r.id === 'string' && r.id ? r.id : `imp_${Date.now()}_${i}`,
+      id: recordId,
       name: r.name.trim(),
       icNumber: r.icNumber.trim(),
       phone: typeof r.phone === 'string' && r.phone.trim() ? r.phone.trim() : undefined,
       patientType,
+      isActive,
+      appointments,
       nextTca: typeof r.nextTca === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.nextTca.trim()) ? r.nextTca.trim() : undefined,
       bloodInvestigationDate: typeof r.bloodInvestigationDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.bloodInvestigationDate.trim()) ? r.bloodInvestigationDate.trim() : undefined,
       bloodInvestigations: investigations,
       bloodOther,
       plan,
-      createdAt: typeof r.createdAt === 'string' ? r.createdAt : now,
-      updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : now
+      createdAt,
+      updatedAt
     });
   }
 

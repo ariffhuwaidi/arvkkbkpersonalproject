@@ -1651,8 +1651,127 @@ body.modal-open {
 }
 
 /* --------------------------------------------------------------------------
-   SORT ACTION SHEET (REUSABLE)
+   SORT ACTION SHEET & ANCHORED DROPDOWN
    -------------------------------------------------------------------------- */
+.sort-dropdown-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1050;
+  background-color: rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+
+.sort-dropdown-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sort-dropdown-menu {
+  background-color: var(--color-sheet-bg-solid);
+  border: 0.5px solid var(--color-separator);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+
+@supports (backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px)) {
+  .sort-dropdown-menu {
+    background-color: var(--color-sheet-bg);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+}
+
+.sort-dropdown-overlay.is-open .sort-dropdown-menu {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sort-dropdown-menu.is-anchored {
+  border-radius: var(--radius-lg);
+  max-width: 320px;
+}
+
+.sort-dropdown-menu.is-sheet {
+  border-top-left-radius: var(--radius-xl);
+  border-top-right-radius: var(--radius-xl);
+  border-bottom: none;
+  padding-bottom: var(--sab);
+}
+
+.sort-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--color-separator);
+  flex-shrink: 0;
+}
+
+.sort-dropdown-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sort-options-list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+}
+
+.sort-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  font-size: 14.5px;
+  color: var(--color-text-primary);
+  background-color: transparent;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 0.5px solid var(--color-separator);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.sort-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.sort-dropdown-item:hover,
+.sort-dropdown-item:focus-visible {
+  background-color: var(--color-bg-tertiary);
+  outline: none;
+}
+
+.sort-dropdown-item.is-active {
+  color: var(--color-accent);
+  font-weight: 600;
+  background-color: var(--color-accent-subtle);
+}
+
+.sort-check-icon {
+  width: 17px;
+  height: 17px;
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
 .action-sheet-options {
   display: flex;
   flex-direction: column;
@@ -1698,6 +1817,221 @@ body.modal-open {
 /* --------------------------------------------------------------------------
    TOAST FEEDBACK NOTIFICATION
    -------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+   DIRECT CARD ACTIONS & APPOINTMENT HISTORY
+   -------------------------------------------------------------------------- */
+.btn-card-menu {
+  background: none;
+  border: none;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.btn-card-menu:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.card-action-btn {
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 0.5px solid var(--color-separator);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.card-action-btn:hover {
+  background-color: var(--color-bg-tertiary);
+}
+.card-action-btn.btn-action-view {
+  color: var(--color-accent);
+  border-color: var(--color-accent-subtle);
+  background-color: var(--color-accent-subtle);
+}
+.card-action-btn.btn-action-delete {
+  color: var(--color-destructive);
+}
+.card-action-btn.btn-action-delete:hover {
+  background-color: rgba(255, 59, 48, 0.1);
+  border-color: var(--color-destructive);
+}
+
+/* Deactivated record styling */
+.record-card.is-deactivated {
+  opacity: 0.75;
+  border-left: 3px solid var(--color-separator-opaque);
+}
+.patient-status-inactive-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-separator-opaque);
+  color: var(--color-text-secondary);
+}
+.deactivated-patient-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+/* Upcoming TCA Section & Overdue Banner */
+.upcoming-tca-card.has-overdue {
+  border: 1.5px solid var(--status-overdue-dot);
+}
+.overdue-action-required-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background-color: var(--status-overdue-bg);
+  color: var(--status-overdue-text);
+  font-size: 13px;
+  margin: 6px 0 10px 0;
+}
+.upcoming-tca-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--color-separator);
+}
+.btn-action-attended {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background-color: #34C759;
+  color: #FFFFFF;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.btn-action-attended:hover {
+  opacity: 0.9;
+}
+.btn-action-dna {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background-color: #FF9500;
+  color: #FFFFFF;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.btn-action-dna:hover {
+  opacity: 0.9;
+}
+.btn-action-reschedule {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-accent);
+  color: #FFFFFF;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.btn-action-reschedule:hover {
+  opacity: 0.9;
+}
+.btn-action-cancel {
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 0.5px solid var(--color-separator);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-action-cancel:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-destructive);
+}
+
+/* Appointment status badges */
+.appointment-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.badge-scheduled {
+  background-color: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+.badge-attended {
+  background-color: rgba(52, 199, 89, 0.15);
+  color: #248A3D;
+}
+.badge-dna {
+  background-color: rgba(255, 149, 0, 0.15);
+  color: #C97200;
+}
+.badge-rescheduled {
+  background-color: rgba(88, 86, 214, 0.15);
+  color: #5856D6;
+}
+.badge-cancelled {
+  background-color: var(--color-separator-opaque);
+  color: var(--color-text-tertiary);
+}
+
+/* TCA History list */
+.tca-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tca-history-item {
+  padding: 10px 14px;
+  background-color: var(--color-bg-primary);
+  border: 0.5px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+}
+.tca-history-date {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
 .toast-container {
   position: fixed;
   bottom: calc(74px + var(--sab));
@@ -1719,7 +2053,222 @@ body.modal-open {
   transition: transform var(--transition-normal), opacity var(--transition-normal);
 }
 
-[data-theme="dark"] .toast-container {
+[data-theme="dark"] /* --------------------------------------------------------------------------
+   DIRECT CARD ACTIONS & APPOINTMENT HISTORY
+   -------------------------------------------------------------------------- */
+.btn-card-menu {
+  background: none;
+  border: none;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.btn-card-menu:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.card-action-btn {
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 0.5px solid var(--color-separator);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.card-action-btn:hover {
+  background-color: var(--color-bg-tertiary);
+}
+.card-action-btn.btn-action-view {
+  color: var(--color-accent);
+  border-color: var(--color-accent-subtle);
+  background-color: var(--color-accent-subtle);
+}
+.card-action-btn.btn-action-delete {
+  color: var(--color-destructive);
+}
+.card-action-btn.btn-action-delete:hover {
+  background-color: rgba(255, 59, 48, 0.1);
+  border-color: var(--color-destructive);
+}
+
+/* Deactivated record styling */
+.record-card.is-deactivated {
+  opacity: 0.75;
+  border-left: 3px solid var(--color-separator-opaque);
+}
+.patient-status-inactive-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-separator-opaque);
+  color: var(--color-text-secondary);
+}
+.deactivated-patient-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+/* Upcoming TCA Section & Overdue Banner */
+.upcoming-tca-card.has-overdue {
+  border: 1.5px solid var(--status-overdue-dot);
+}
+.overdue-action-required-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background-color: var(--status-overdue-bg);
+  color: var(--status-overdue-text);
+  font-size: 13px;
+  margin: 6px 0 10px 0;
+}
+.upcoming-tca-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--color-separator);
+}
+.btn-action-attended {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background-color: #34C759;
+  color: #FFFFFF;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.btn-action-attended:hover {
+  opacity: 0.9;
+}
+.btn-action-dna {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background-color: #FF9500;
+  color: #FFFFFF;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.btn-action-dna:hover {
+  opacity: 0.9;
+}
+.btn-action-reschedule {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-accent);
+  color: #FFFFFF;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.btn-action-reschedule:hover {
+  opacity: 0.9;
+}
+.btn-action-cancel {
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 0.5px solid var(--color-separator);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-action-cancel:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-destructive);
+}
+
+/* Appointment status badges */
+.appointment-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.badge-scheduled {
+  background-color: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+.badge-attended {
+  background-color: rgba(52, 199, 89, 0.15);
+  color: #248A3D;
+}
+.badge-dna {
+  background-color: rgba(255, 149, 0, 0.15);
+  color: #C97200;
+}
+.badge-rescheduled {
+  background-color: rgba(88, 86, 214, 0.15);
+  color: #5856D6;
+}
+.badge-cancelled {
+  background-color: var(--color-separator-opaque);
+  color: var(--color-text-tertiary);
+}
+
+/* TCA History list */
+.tca-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tca-history-item {
+  padding: 10px 14px;
+  background-color: var(--color-bg-primary);
+  border: 0.5px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+}
+.tca-history-date {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.toast-container {
   background-color: rgba(255, 255, 255, 0.94);
   color: #000000;
 }

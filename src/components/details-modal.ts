@@ -1,4 +1,4 @@
-import type { PatientRecord } from '../types';
+import type { PatientRecord, TCAAppointment, PatientType, AppointmentStatus } from '../types';
 import { getTCAStatus, formatDisplayDate, isDatePast } from '../utils/date';
 
 function escapeHTML(str: string): string {
@@ -10,11 +10,20 @@ function escapeHTML(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
+export interface DetailsModalHandlers {
+  onEdit: (record: PatientRecord) => void;
+  onDelete: (record: PatientRecord) => void;
+  onToggleActive: (record: PatientRecord, makeActive: boolean) => void;
+  onChangeCategory: (record: PatientRecord, newCategory: PatientType) => void;
+  onScheduleTca: (record: PatientRecord) => void;
+  onRescheduleTca: (record: PatientRecord, appointment: TCAAppointment) => void;
+  onUpdateStatus: (record: PatientRecord, appointment: TCAAppointment, status: AppointmentStatus) => void;
+}
+
 export class DetailsModal {
   private overlayEl: HTMLElement;
   private currentRecord: PatientRecord | null = null;
-  private onEditCallback: ((record: PatientRecord) => void) | null = null;
-  private onDeleteCallback: ((record: PatientRecord) => void) | null = null;
+  private handlers: DetailsModalHandlers | null = null;
   private previousActiveElement: HTMLElement | null = null;
 
   constructor() {
@@ -25,7 +34,7 @@ export class DetailsModal {
     this.overlayEl.setAttribute('aria-label', 'Patient Profile');
 
     this.overlayEl.innerHTML = `
-      <div class="bottom-sheet profile-modal">
+      <div class="bottom-sheet profile-modal" style="max-width: 620px;">
         <div class="sheet-grab-bar"></div>
         <div class="sheet-header">
           <span class="sheet-title">Patient Profile</span>
@@ -37,11 +46,14 @@ export class DetailsModal {
           </button>
         </div>
         <div class="sheet-body" id="details-content"></div>
-        <div class="sheet-footer" style="justify-content: space-between;">
-          <button type="button" id="btn-delete-record" class="btn-destructive">Delete</button>
-          <div style="display: flex; gap: 8px;">
+        <div class="sheet-footer profile-footer-actions">
+          <div class="footer-left-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="btn-toggle-deactivate" class="btn-secondary" style="font-weight: 500; font-size: 13.5px;"></button>
+            <button type="button" id="btn-delete-record" class="btn-destructive" style="font-size: 13.5px;">Delete</button>
+          </div>
+          <div class="footer-right-actions" style="display: flex; gap: 8px;">
             <button type="button" class="btn-secondary" data-action="close">Close</button>
-            <button type="button" id="btn-edit-record" class="btn-primary">Edit</button>
+            <button type="button" id="btn-edit-record" class="btn-primary">Edit Patient</button>
           </div>
         </div>
       </div>
@@ -54,6 +66,7 @@ export class DetailsModal {
   private bindEvents(): void {
     const editBtn = this.overlayEl.querySelector('#btn-edit-record') as HTMLButtonElement;
     const deleteBtn = this.overlayEl.querySelector('#btn-delete-record') as HTMLButtonElement;
+    const deactivateBtn = this.overlayEl.querySelector('#btn-toggle-deactivate') as HTMLButtonElement;
 
     this.overlayEl.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
@@ -69,59 +82,86 @@ export class DetailsModal {
     });
 
     editBtn.addEventListener('click', () => {
-      if (this.currentRecord && this.onEditCallback) {
+      if (this.currentRecord && this.handlers) {
         const rec = this.currentRecord;
         this.close();
-        this.onEditCallback(rec);
+        this.handlers.onEdit(rec);
       }
     });
 
     deleteBtn.addEventListener('click', () => {
-      if (this.currentRecord && this.onDeleteCallback) {
-        const rec = this.currentRecord;
-        this.onDeleteCallback(rec);
+      if (this.currentRecord && this.handlers) {
+        this.handlers.onDelete(this.currentRecord);
+      }
+    });
+
+    deactivateBtn.addEventListener('click', () => {
+      if (this.currentRecord && this.handlers) {
+        const isCurrentlyActive = this.currentRecord.isActive !== false;
+        this.handlers.onToggleActive(this.currentRecord, !isCurrentlyActive);
       }
     });
   }
 
   public open(
     record: PatientRecord,
-    onEdit: (record: PatientRecord) => void,
-    onDelete: (record: PatientRecord) => void,
+    handlers: DetailsModalHandlers,
     triggerEl?: HTMLElement
   ): void {
     this.currentRecord = record;
-    this.onEditCallback = onEdit;
-    this.onDeleteCallback = onDelete;
+    this.handlers = handlers;
     this.previousActiveElement = triggerEl || (document.activeElement as HTMLElement);
 
-    const contentEl = this.overlayEl.querySelector('#details-content') as HTMLElement;
-    const tcaStatus = getTCAStatus(record.nextTca);
+    const deactivateBtn = this.overlayEl.querySelector('#btn-toggle-deactivate') as HTMLButtonElement;
+    const isCurrentlyActive = record.isActive !== false;
+    deactivateBtn.textContent = isCurrentlyActive ? 'Deactivate Patient' : 'Reactivate Patient';
 
-    let tcaBadgeHtml = '';
-    if (tcaStatus.type !== 'none') {
-      tcaBadgeHtml = `
-        <div class="tca-indicator tca-${tcaStatus.type}">
-          <span class="tca-dot"></span>
-          <span>${escapeHTML(tcaStatus.label)}</span>
+    this.renderProfileContent();
+    document.body.classList.add('modal-open');
+    this.overlayEl.classList.add('is-open');
+  }
+
+  public updateRecord(record: PatientRecord): void {
+    this.currentRecord = record;
+    const deactivateBtn = this.overlayEl.querySelector('#btn-toggle-deactivate') as HTMLButtonElement;
+    const isCurrentlyActive = record.isActive !== false;
+    deactivateBtn.textContent = isCurrentlyActive ? 'Deactivate Patient' : 'Reactivate Patient';
+    this.renderProfileContent();
+  }
+
+  private renderProfileContent(): void {
+    if (!this.currentRecord) return;
+    const record = this.currentRecord;
+    const contentEl = this.overlayEl.querySelector('#details-content') as HTMLElement;
+
+    const isCurrentlyActive = record.isActive !== false;
+    const isNew = record.patientType === 'New';
+
+    // Status Banner (Active/Inactive)
+    let activeBannerHtml = '';
+    if (!isCurrentlyActive) {
+      activeBannerHtml = `
+        <div class="deactivated-patient-banner">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+          </svg>
+          <div>
+            <strong>Patient Record Deactivated</strong>
+            <div style="font-size: 12.5px; opacity: 0.9;">All medical history, appointments, and investigations remain safely preserved.</div>
+          </div>
         </div>
       `;
     }
 
-    const tcaFormatted = record.nextTca ? formatDisplayDate(record.nextTca) : 'No TCA scheduled';
+    // Patient Category Badge & Toggle Button
+    const categoryTag = isNew
+      ? `<span class="patient-type-pill pill-new">New Patient</span>`
+      : `<span class="patient-type-pill pill-existing">Existing Patient</span>`;
 
-    // Blood Date formatting & status
-    let bloodFormatted = 'None';
-    let bloodBadgeHtml = '';
-    if (record.bloodInvestigationDate) {
-      bloodFormatted = formatDisplayDate(record.bloodInvestigationDate);
-      const isPast = isDatePast(record.bloodInvestigationDate);
-      const hasWork = (record.bloodInvestigations && record.bloodInvestigations.length > 0) || Boolean(record.plan && record.plan.trim());
-      if (isPast && hasWork) {
-        bloodBadgeHtml = `<span class="blood-status-note overdue" style="margin-left: 6px;">(Overdue)</span>`;
-      }
-    }
+    const switchCategoryLabel = isNew ? 'Switch to Existing Patient' : 'Switch to New Patient';
 
+    // Phone link
     const phoneLink = record.phone
       ? `<a href="tel:${escapeHTML(record.phone)}" class="profile-tel-link">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -131,38 +171,250 @@ export class DetailsModal {
          </a>`
       : '<span style="color: var(--color-text-tertiary); font-style: italic;">None</span>';
 
-    // Blood investigations display
-    let investigationsDisplay = '<span style="color: var(--color-text-tertiary); font-style: italic;">None selected</span>';
-    if (record.bloodInvestigations && record.bloodInvestigations.length > 0) {
-      const chips = record.bloodInvestigations.map(inv => {
-        const text = inv === 'Other' && record.bloodOther ? `Other: ${record.bloodOther}` : inv;
-        return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHTML(text)}</span>`;
-      }).join('');
-      investigationsDisplay = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
+    // Appointments parsing: Upcoming (Scheduled) vs History (Attended, DNA, Rescheduled, Cancelled)
+    const appointments: TCAAppointment[] = Array.isArray(record.appointments) ? record.appointments : [];
+    const scheduledApts = appointments.filter(a => a.status === 'Scheduled');
+    const historicalApts = appointments.filter(a => a.status !== 'Scheduled').sort((a, b) => b.tcaDate.localeCompare(a.tcaDate));
+
+    // Sort scheduled appointments (earliest first)
+    scheduledApts.sort((a, b) => a.tcaDate.localeCompare(b.tcaDate));
+    const nextApt = scheduledApts.length > 0 ? scheduledApts[0] : null;
+
+    // SECTION A: Upcoming TCA HTML
+    let upcomingSectionHtml = '';
+    if (nextApt) {
+      const tcaStatus = getTCAStatus(nextApt.tcaDate);
+      const isOverdue = tcaStatus.type === 'overdue';
+      const formattedDate = formatDisplayDate(nextApt.tcaDate);
+
+      // Overdue alert banner if required
+      let overdueBanner = '';
+      if (isOverdue) {
+        overdueBanner = `
+          <div class="overdue-action-required-banner">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span><strong>Overdue Appointment: Action Required.</strong> Record patient attendance, mark DNA, or reschedule.</span>
+          </div>
+        `;
+      }
+
+      // Blood date
+      let bloodFormatted = 'None';
+      let bloodBadgeHtml = '';
+      if (nextApt.bloodInvestigationDate) {
+        bloodFormatted = formatDisplayDate(nextApt.bloodInvestigationDate);
+        if (isDatePast(nextApt.bloodInvestigationDate)) {
+          bloodBadgeHtml = `<span class="blood-status-note overdue" style="margin-left: 6px;">(Overdue)</span>`;
+        }
+      }
+
+      // Blood investigations
+      let invsHtml = '<span style="color: var(--color-text-tertiary); font-style: italic;">None selected</span>';
+      if (nextApt.bloodInvestigations && nextApt.bloodInvestigations.length > 0) {
+        const chips = nextApt.bloodInvestigations.map(inv => {
+          const text = inv === 'Other' && nextApt.bloodOther ? `Other: ${nextApt.bloodOther}` : inv;
+          return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHTML(text)}</span>`;
+        }).join('');
+        invsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
+      }
+
+      // Plan & notes
+      const planHtml = nextApt.plan && nextApt.plan.trim()
+        ? `<div class="detail-plan-box">${escapeHTML(nextApt.plan)}</div>`
+        : '<span style="color: var(--color-text-tertiary); font-style: italic;">No specific plan recorded</span>';
+
+      const notesHtml = nextApt.notes && nextApt.notes.trim()
+        ? `<div style="font-size: 13px; color: var(--color-text-secondary); margin-top: 4px;"><em>Note: ${escapeHTML(nextApt.notes)}</em></div>`
+        : '';
+
+      upcomingSectionHtml = `
+        <div class="profile-section-card upcoming-tca-card ${isOverdue ? 'has-overdue' : ''}">
+          <div class="profile-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+            <span>A. Upcoming Scheduled TCA</span>
+            <span class="appointment-status-badge badge-scheduled">Scheduled</span>
+          </div>
+          ${overdueBanner}
+          <div class="profile-row-item">
+            <span class="profile-row-label">Appointment Date</span>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="profile-row-value" style="font-size: 16px; font-weight: 700;">${formattedDate}</span>
+              <div class="tca-indicator tca-${tcaStatus.type}">
+                <span class="tca-dot"></span>
+                <span>${escapeHTML(tcaStatus.label)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="profile-row-item">
+            <span class="profile-row-label">Blood Investigation Date</span>
+            <div style="display: flex; align-items: center;">
+              <span class="profile-row-value">${bloodFormatted}</span>
+              ${bloodBadgeHtml}
+            </div>
+          </div>
+          <div class="profile-row-item" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+            <span class="profile-row-label">Investigations to Perform:</span>
+            ${invsHtml}
+          </div>
+          <div class="profile-row-item" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+            <span class="profile-row-label">Follow-up Plan:</span>
+            ${planHtml}
+            ${notesHtml}
+          </div>
+
+          <!-- Upcoming Action Buttons -->
+          <div class="upcoming-tca-actions">
+            <button type="button" class="btn-action-attended" data-action="mark-attended" data-apt-id="${nextApt.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Mark Attended
+            </button>
+            <button type="button" class="btn-action-dna" data-action="mark-dna" data-apt-id="${nextApt.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+              Mark DNA
+            </button>
+            <button type="button" class="btn-action-reschedule" data-action="reschedule" data-apt-id="${nextApt.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+              Reschedule
+            </button>
+            <button type="button" class="btn-action-cancel" data-action="cancel" data-apt-id="${nextApt.id}">
+              Cancel
+            </button>
+          </div>
+
+          <div style="margin-top: 12px; text-align: right;">
+            <button type="button" id="btn-create-extra-tca" class="btn-secondary" style="font-size: 13px; padding: 6px 12px;">
+              + Schedule Another Appointment
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      upcomingSectionHtml = `
+        <div class="profile-section-card upcoming-tca-card">
+          <div class="profile-section-title">A. Upcoming Scheduled TCA</div>
+          <div style="padding: 16px; text-align: center; color: var(--color-text-secondary); background-color: var(--color-bg-secondary); border-radius: var(--radius-md);">
+            <p style="font-size: 14.5px; font-weight: 500; margin-bottom: 6px;">No Upcoming TCA Scheduled</p>
+            <p style="font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 12px;">Patient does not have an active scheduled appointment.</p>
+            <button type="button" id="btn-schedule-new-tca" class="btn-primary" style="font-size: 14px; padding: 8px 18px;">
+              + Schedule TCA Appointment
+            </button>
+          </div>
+        </div>
+      `;
     }
 
-    // Plan display
-    const planDisplay = record.plan && record.plan.trim()
-      ? `<div class="detail-plan-box">${escapeHTML(record.plan)}</div>`
-      : '<span style="color: var(--color-text-tertiary); font-style: italic;">No clinical plan recorded</span>';
+    // SECTION B: TCA History HTML
+    let historyItemsHtml = '';
+    if (historicalApts.length > 0) {
+      historyItemsHtml = historicalApts.map(apt => {
+        const formattedDate = formatDisplayDate(apt.tcaDate);
+        let statusClass = 'badge-cancelled';
+        if (apt.status === 'Attended') statusClass = 'badge-attended';
+        else if (apt.status === 'DNA') statusClass = 'badge-dna';
+        else if (apt.status === 'Rescheduled') statusClass = 'badge-rescheduled';
 
-    const typeTag = record.patientType === 'New'
-      ? `<span class="patient-type-pill pill-new">New Patient</span>`
-      : `<span class="patient-type-pill pill-existing">Existing Patient</span>`;
+        let reschedNotice = '';
+        if (apt.status === 'Rescheduled' && apt.rescheduledToAppointmentId) {
+          reschedNotice = `<span style="font-size: 12px; color: var(--color-accent); font-weight: 500;">(Rescheduled to new date)</span>`;
+        }
+
+        let bloodInfo = '';
+        if (apt.bloodInvestigationDate) {
+          bloodInfo = `<div style="font-size: 13px; margin-top: 4px;"><strong>Blood Date:</strong> ${formatDisplayDate(apt.bloodInvestigationDate)}</div>`;
+        }
+
+        let invsChips = '';
+        if (apt.bloodInvestigations && apt.bloodInvestigations.length > 0) {
+          const chips = apt.bloodInvestigations.map(inv => {
+            const text = inv === 'Other' && apt.bloodOther ? `Other: ${apt.bloodOther}` : inv;
+            return `<span class="mini-chip" style="font-size: 11.5px; padding: 2px 7px;">${escapeHTML(text)}</span>`;
+          }).join('');
+          invsChips = `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">${chips}</div>`;
+        }
+
+        let planText = '';
+        if (apt.plan && apt.plan.trim()) {
+          planText = `<div style="font-size: 13px; color: var(--color-text-primary); margin-top: 5px; background-color: var(--color-bg-secondary); padding: 6px 10px; border-radius: var(--radius-sm);">${escapeHTML(apt.plan)}</div>`;
+        }
+
+        let notesText = '';
+        if (apt.notes && apt.notes.trim()) {
+          notesText = `<div style="font-size: 12.5px; color: var(--color-text-tertiary); margin-top: 4px;"><em>Notes: ${escapeHTML(apt.notes)}</em></div>`;
+        }
+
+        return `
+          <div class="tca-history-item">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="tca-history-date">${formattedDate}</span>
+                ${reschedNotice}
+              </div>
+              <span class="appointment-status-badge ${statusClass}">${apt.status}</span>
+            </div>
+            ${bloodInfo}
+            ${invsChips}
+            ${planText}
+            ${notesText}
+          </div>
+        `;
+      }).join('');
+    } else {
+      historyItemsHtml = `
+        <div style="padding: 14px; text-align: center; color: var(--color-text-tertiary); font-style: italic; font-size: 13.5px;">
+          No previous appointment history recorded for this patient.
+        </div>
+      `;
+    }
+
+    const historySectionHtml = `
+      <div class="profile-section-card">
+        <div class="profile-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+          <span>B. TCA History (${historicalApts.length} past records)</span>
+        </div>
+        <div class="tca-history-list">
+          ${historyItemsHtml}
+        </div>
+      </div>
+    `;
 
     contentEl.innerHTML = `
       <div class="profile-group-wrapper">
+        ${activeBannerHtml}
+
         <!-- Header Section -->
         <div class="profile-header-card">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
-            <h2 class="profile-patient-name">${escapeHTML(record.name)}</h2>
-            ${typeTag}
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+            <div>
+              <h2 class="profile-patient-name">${escapeHTML(record.name)}</h2>
+              <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                ${categoryTag}
+                <button type="button" id="btn-switch-category" class="btn-text-action" style="font-size: 12.5px; color: var(--color-accent); text-decoration: underline; background: none; border: none; cursor: pointer; padding: 2px;">
+                  ${switchCategoryLabel}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Section 1: Identification & Contact -->
+        <!-- Section: Identification & Contact -->
         <div class="profile-section-card">
-          <div class="profile-section-title">Identification & Contact</div>
+          <div class="profile-section-title">Patient Identification & Contact</div>
+          <div class="profile-row-item">
+            <span class="profile-row-label">Patient ID</span>
+            <span class="profile-row-value monospace" style="font-size: 13px; color: var(--color-text-secondary);">${escapeHTML(record.id)}</span>
+          </div>
           <div class="profile-row-item">
             <span class="profile-row-label">IC Number</span>
             <span class="profile-row-value monospace">${escapeHTML(record.icNumber)}</span>
@@ -173,44 +425,58 @@ export class DetailsModal {
           </div>
         </div>
 
-        <!-- Section 2: Appointments & Investigations -->
-        <div class="profile-section-card">
-          <div class="profile-section-title">Appointments & Investigations</div>
-          <div class="profile-row-item">
-            <span class="profile-row-label">Next TCA</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="profile-row-value" style="font-weight: 600;">${tcaFormatted}</span>
-              ${tcaBadgeHtml}
-            </div>
-          </div>
-          <div class="profile-row-item">
-            <span class="profile-row-label">Blood Date</span>
-            <div style="display: flex; align-items: center;">
-              <span class="profile-row-value">${bloodFormatted}</span>
-              ${bloodBadgeHtml}
-            </div>
-          </div>
-        </div>
+        <!-- Section A: Upcoming Scheduled TCA -->
+        ${upcomingSectionHtml}
 
-        <!-- Section 3: Blood Investigations -->
-        <div class="profile-section-card">
-          <div class="profile-section-title">Blood Investigations</div>
-          ${investigationsDisplay}
-        </div>
-
-        <!-- Section 4: Clinical Plan -->
-        <div class="profile-section-card">
-          <div class="profile-section-title">Plan</div>
-          ${planDisplay}
-        </div>
+        <!-- Section B: TCA History -->
+        ${historySectionHtml}
       </div>
     `;
 
-    this.overlayEl.classList.add('is-open');
+    // Wire up buttons inside profile
+    contentEl.querySelector('#btn-switch-category')?.addEventListener('click', () => {
+      if (this.currentRecord && this.handlers) {
+        const newCategory: PatientType = this.currentRecord.patientType === 'New' ? 'Existing' : 'New';
+        this.handlers.onChangeCategory(this.currentRecord, newCategory);
+      }
+    });
+
+    contentEl.querySelector('#btn-schedule-new-tca')?.addEventListener('click', () => {
+      if (this.currentRecord && this.handlers) {
+        this.handlers.onScheduleTca(this.currentRecord);
+      }
+    });
+
+    contentEl.querySelector('#btn-create-extra-tca')?.addEventListener('click', () => {
+      if (this.currentRecord && this.handlers) {
+        this.handlers.onScheduleTca(this.currentRecord);
+      }
+    });
+
+    // Upcoming action buttons
+    contentEl.querySelectorAll('[data-action]').forEach(btn => {
+      const action = btn.getAttribute('data-action');
+      const aptId = btn.getAttribute('data-apt-id');
+      if (!action || !aptId || !nextApt) return;
+
+      btn.addEventListener('click', () => {
+        if (!this.currentRecord || !this.handlers) return;
+        if (action === 'mark-attended') {
+          this.handlers.onUpdateStatus(this.currentRecord, nextApt, 'Attended');
+        } else if (action === 'mark-dna') {
+          this.handlers.onUpdateStatus(this.currentRecord, nextApt, 'DNA');
+        } else if (action === 'reschedule') {
+          this.handlers.onRescheduleTca(this.currentRecord, nextApt);
+        } else if (action === 'cancel') {
+          this.handlers.onUpdateStatus(this.currentRecord, nextApt, 'Cancelled');
+        }
+      });
+    });
   }
 
   public close(): void {
     if (!this.isOpen()) return;
+    document.body.classList.remove('modal-open');
     this.overlayEl.classList.remove('is-open');
 
     if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {

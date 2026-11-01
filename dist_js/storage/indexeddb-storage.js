@@ -1,7 +1,7 @@
-                                                                           
+                                                                                           
 
 const DB_NAME = 'arv_kkbk_db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_NAME = 'records';
 
 export class IndexedDBStorage                           {
@@ -56,6 +56,33 @@ export class IndexedDBStorage                           {
                 }
                 if (!Array.isArray(val.bloodInvestigations)) {
                   val.bloodInvestigations = [];
+                  modified = true;
+                }
+              }
+
+              // Migration for version < 4: separate appointment history and isActive status
+              if (oldVersion < 4) {
+                if (val.isActive === undefined) {
+                  val.isActive = true;
+                  modified = true;
+                }
+                if (!Array.isArray(val.appointments) || val.appointments.length === 0) {
+                  val.appointments = [];
+                  if (val.nextTca) {
+                    val.appointments.push({
+                      id: `apt_migrated_${val.id}`,
+                      patientId: val.id,
+                      tcaDate: val.nextTca,
+                      status: 'Scheduled',
+                      notes: 'Initial recorded appointment',
+                      plan: val.plan,
+                      bloodInvestigationDate: val.bloodInvestigationDate,
+                      bloodInvestigations: val.bloodInvestigations || [],
+                      bloodOther: val.bloodOther,
+                      createdAt: val.createdAt || new Date().toISOString(),
+                      updatedAt: val.updatedAt || new Date().toISOString()
+                    });
+                  }
                   modified = true;
                 }
               }
@@ -124,13 +151,67 @@ export class IndexedDBStorage                           {
     const existing = record.id ? await this.get(record.id) : null;
     const investigations = Array.isArray(record.bloodInvestigations) ? record.bloodInvestigations : [];
     const isOtherTicked = investigations.includes('Other');
+    const patientId = record.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
-    const finalRecord                = {
-      id: record.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+    // Manage appointments
+    let appointments                   = [];
+    if (Array.isArray(record.appointments) && record.appointments.length > 0) {
+      appointments = record.appointments;
+    } else if (existing && Array.isArray(existing.appointments) && existing.appointments.length > 0) {
+      appointments = [...existing.appointments];
+      // If user provided or changed nextTca in form, check if we need to update/create scheduled appointment
+      if (record.nextTca && record.nextTca.trim()) {
+        const scheduledIndex = appointments.findIndex(a => a.status === 'Scheduled');
+        if (scheduledIndex >= 0) {
+          appointments[scheduledIndex] = {
+            ...appointments[scheduledIndex],
+            tcaDate: record.nextTca.trim(),
+            bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
+            bloodInvestigations: investigations,
+            bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+            plan: record.plan ? record.plan.trim() : undefined,
+            updatedAt: now
+          };
+        } else {
+          // Add new scheduled appointment
+          appointments.push({
+            id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            patientId,
+            tcaDate: record.nextTca.trim(),
+            status: 'Scheduled',
+            bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
+            bloodInvestigations: investigations,
+            bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+            plan: record.plan ? record.plan.trim() : undefined,
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      }
+    } else if (record.nextTca && record.nextTca.trim()) {
+      appointments = [{
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        patientId,
+        tcaDate: record.nextTca.trim(),
+        status: 'Scheduled',
+        notes: 'Initial appointment',
+        bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
+        bloodInvestigations: investigations,
+        bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+        plan: record.plan ? record.plan.trim() : undefined,
+        createdAt: now,
+        updatedAt: now
+      }];
+    }
+
+    const preRecord      = {
+      id: patientId,
       name: record.name.trim(),
       icNumber: record.icNumber.trim(),
       phone: record.phone ? record.phone.trim() : undefined,
       patientType: record.patientType || existing?.patientType || 'Existing',
+      isActive: record.isActive !== undefined ? Boolean(record.isActive) : (existing?.isActive !== undefined ? existing.isActive : true),
+      appointments,
       nextTca: record.nextTca ? record.nextTca.trim() : undefined,
       bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
       bloodInvestigations: investigations,
@@ -139,6 +220,8 @@ export class IndexedDBStorage                           {
       createdAt: existing?.createdAt || record.createdAt || now,
       updatedAt: now
     };
+
+    const finalRecord = this.normalizeRecord(preRecord);
 
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -246,11 +329,73 @@ export class IndexedDBStorage                           {
     });
   }
 
-          normalizeRecord(raw     )                {
+         normalizeRecord(raw     )                {
     // If legacy bloodInvestigationsPlan is present and plan is absent, migrate it
     const plan = raw.plan !== undefined ? raw.plan : (raw.bloodInvestigationsPlan || undefined);
     const investigations = Array.isArray(raw.bloodInvestigations) ? raw.bloodInvestigations : [];
     const isOther = investigations.includes('Other');
+    const isActive = raw.isActive !== undefined ? Boolean(raw.isActive) : true;
+    const patientId = raw.id;
+
+    // Normalize appointments array
+    let appointments                   = [];
+    if (Array.isArray(raw.appointments) && raw.appointments.length > 0) {
+      appointments = raw.appointments.map((apt     ) => {
+        const aptInvs = Array.isArray(apt.bloodInvestigations) ? apt.bloodInvestigations : [];
+        const isAptOther = aptInvs.includes('Other');
+        return {
+          id: apt.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`),
+          patientId: apt.patientId || patientId,
+          tcaDate: (apt.tcaDate || '').trim(),
+          status: apt.status || 'Scheduled',
+          notes: apt.notes ? apt.notes.trim() : undefined,
+          plan: apt.plan ? apt.plan.trim() : undefined,
+          bloodInvestigationDate: apt.bloodInvestigationDate ? apt.bloodInvestigationDate.trim() : undefined,
+          bloodInvestigations: aptInvs,
+          bloodOther: isAptOther && apt.bloodOther ? apt.bloodOther.trim() : undefined,
+          rescheduledToAppointmentId: apt.rescheduledToAppointmentId,
+          rescheduledFromAppointmentId: apt.rescheduledFromAppointmentId,
+          attendedAt: apt.attendedAt,
+          createdAt: apt.createdAt || raw.createdAt || new Date().toISOString(),
+          updatedAt: apt.updatedAt || raw.updatedAt || new Date().toISOString()
+        };
+      });
+    } else if (raw.nextTca && typeof raw.nextTca === 'string' && raw.nextTca.trim()) {
+      appointments = [{
+        id: `apt_migrated_${patientId}`,
+        patientId,
+        tcaDate: raw.nextTca.trim(),
+        status: 'Scheduled',
+        notes: 'Initial recorded appointment',
+        plan: plan ? plan.trim() : undefined,
+        bloodInvestigationDate: raw.bloodInvestigationDate ? raw.bloodInvestigationDate.trim() : undefined,
+        bloodInvestigations: investigations,
+        bloodOther: isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined,
+        createdAt: raw.createdAt || new Date().toISOString(),
+        updatedAt: raw.updatedAt || new Date().toISOString()
+      }];
+    }
+
+    // Determine latest upcoming scheduled appointment for fast top-level access
+    const scheduledApts = appointments.filter(a => a.status === 'Scheduled');
+    let activeApt                            ;
+
+    if (scheduledApts.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const upcoming = scheduledApts.filter(a => a.tcaDate >= today).sort((a, b) => a.tcaDate.localeCompare(b.tcaDate));
+      if (upcoming.length > 0) {
+        activeApt = upcoming[0];
+      } else {
+        const overdue = [...scheduledApts].sort((a, b) => a.tcaDate.localeCompare(b.tcaDate));
+        activeApt = overdue[0];
+      }
+    }
+
+    const nextTca = activeApt ? activeApt.tcaDate : undefined;
+    const bloodDate = activeApt ? activeApt.bloodInvestigationDate : (raw.bloodInvestigationDate ? raw.bloodInvestigationDate.trim() : undefined);
+    const activeInvs = activeApt ? activeApt.bloodInvestigations : investigations;
+    const activeOther = activeApt ? activeApt.bloodOther : (isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined);
+    const activePlan = activeApt && activeApt.plan ? activeApt.plan : (plan ? plan.trim() : undefined);
 
     return {
       id: raw.id,
@@ -258,14 +403,153 @@ export class IndexedDBStorage                           {
       icNumber: (raw.icNumber || '').trim(),
       phone: raw.phone ? raw.phone.trim() : undefined,
       patientType: (raw.patientType               ) || 'Existing',
-      nextTca: raw.nextTca ? raw.nextTca.trim() : undefined,
-      bloodInvestigationDate: raw.bloodInvestigationDate ? raw.bloodInvestigationDate.trim() : undefined,
-      bloodInvestigations: investigations,
-      bloodOther: isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined,
-      plan: plan ? plan.trim() : undefined,
+      isActive,
+      appointments,
+      nextTca,
+      bloodInvestigationDate: bloodDate,
+      bloodInvestigations: activeInvs,
+      bloodOther: activeOther,
+      plan: activePlan,
       createdAt: raw.createdAt || new Date().toISOString(),
       updatedAt: raw.updatedAt || new Date().toISOString()
     };
+  }
+
+  async addAppointment(
+    patientId        ,
+    aptData                                                                      
+  )                          {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const now = new Date().toISOString();
+    const aptId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newApt                 = {
+      ...aptData,
+      id: aptId,
+      patientId,
+      status: aptData.status || 'Scheduled',
+      bloodInvestigations: Array.isArray(aptData.bloodInvestigations) ? aptData.bloodInvestigations : [],
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const appointments = [...(patient.appointments || []), newApt];
+    await this.save({
+      ...patient,
+      appointments
+    });
+
+    return newApt;
+  }
+
+  async updateAppointment(
+    patientId        ,
+    aptId        ,
+    updates                         
+  )                          {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const appointments = [...(patient.appointments || [])];
+    const index = appointments.findIndex(a => a.id === aptId);
+    if (index === -1) throw new Error(`Appointment ${aptId} not found`);
+
+    const now = new Date().toISOString();
+    const updatedApt                 = {
+      ...appointments[index],
+      ...updates,
+      updatedAt: now
+    };
+
+    if (updates.status === 'Attended' && !updatedApt.attendedAt) {
+      updatedApt.attendedAt = now;
+    }
+
+    appointments[index] = updatedApt;
+
+    await this.save({
+      ...patient,
+      appointments
+    });
+
+    return updatedApt;
+  }
+
+  async rescheduleAppointment(
+    patientId        ,
+    oldAptId        ,
+    newAptData   
+                      
+                     
+                    
+                                      
+                                     
+                          
+     
+  )                                                              {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const appointments = [...(patient.appointments || [])];
+    const oldIndex = appointments.findIndex(a => a.id === oldAptId);
+    if (oldIndex === -1) throw new Error(`Appointment ${oldAptId} not found`);
+
+    const now = new Date().toISOString();
+    const newAptId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    // Mark old appointment as Rescheduled, referencing new appointment
+    const oldApt                 = {
+      ...appointments[oldIndex],
+      status: 'Rescheduled',
+      rescheduledToAppointmentId: newAptId,
+      updatedAt: now
+    };
+    appointments[oldIndex] = oldApt;
+
+    // Create new appointment
+    const newApt                 = {
+      id: newAptId,
+      patientId,
+      tcaDate: newAptData.tcaDate.trim(),
+      status: 'Scheduled',
+      notes: newAptData.notes ? newAptData.notes.trim() : `Rescheduled from ${oldApt.tcaDate}`,
+      plan: newAptData.plan ? newAptData.plan.trim() : oldApt.plan,
+      bloodInvestigationDate: newAptData.bloodInvestigationDate ? newAptData.bloodInvestigationDate.trim() : undefined,
+      bloodInvestigations: Array.isArray(newAptData.bloodInvestigations) ? newAptData.bloodInvestigations : (oldApt.bloodInvestigations || []),
+      bloodOther: newAptData.bloodOther ? newAptData.bloodOther.trim() : oldApt.bloodOther,
+      rescheduledFromAppointmentId: oldAptId,
+      createdAt: now,
+      updatedAt: now
+    };
+    appointments.push(newApt);
+
+    await this.save({
+      ...patient,
+      appointments
+    });
+
+    return { oldApt, newApt };
+  }
+
+  async setPatientActiveStatus(patientId        , isActive         )                         {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    return this.save({
+      ...patient,
+      isActive
+    });
+  }
+
+  async setPatientCategory(patientId        , category             )                         {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    return this.save({
+      ...patient,
+      patientType: category
+    });
   }
 }
 
