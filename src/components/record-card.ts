@@ -70,7 +70,7 @@ export function createRecordCard(
        </div>`
     : '';
 
-  // Blood date label & subtle overdue indicator
+  // Blood date label & subtle overdue/attendance indicator
   let bloodHtml = '';
   if (record.bloodInvestigationDate) {
     const formattedBlood = formatDisplayDate(record.bloodInvestigationDate);
@@ -78,7 +78,15 @@ export function createRecordCard(
     const hasWork = (record.bloodInvestigations && record.bloodInvestigations.length > 0) || Boolean(record.plan && record.plan.trim());
 
     let statusNote = '';
-    if (isPast && hasWork) {
+    if (record.currentBloodStatus === 'Attended') {
+      statusNote = `<span class="blood-status-note attended" style="color: #248A3D; font-weight: 600;">(Sample Collected)</span>`;
+    } else if (record.currentBloodStatus === 'DNA') {
+      statusNote = `<span class="blood-status-note dna" style="color: #C97200; font-weight: 600;">(DNA)</span>`;
+    } else if (record.currentBloodStatus === 'Rescheduled') {
+      statusNote = `<span class="blood-status-note rescheduled" style="color: #5856D6; font-weight: 600;">(Rescheduled)</span>`;
+    } else if (record.currentBloodStatus === 'Cancelled') {
+      statusNote = `<span class="blood-status-note cancelled" style="color: var(--color-text-tertiary); font-weight: 600;">(Cancelled)</span>`;
+    } else if (isPast && hasWork) {
       statusNote = `<span class="blood-status-note overdue">(Overdue)</span>`;
     }
 

@@ -1,7 +1,14 @@
-import type { PatientRecord, IRecordStorage, PatientType, TCAAppointment } from '../types';
+import type {
+  PatientRecord,
+  IRecordStorage,
+  PatientType,
+  TCAAppointment,
+  BloodCollectionAppointment,
+  BloodCollectionStatus
+} from '../types';
 
 const DB_NAME = 'arv_kkbk_db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_NAME = 'records';
 
 export class IndexedDBStorage implements IRecordStorage {
@@ -87,6 +94,29 @@ export class IndexedDBStorage implements IRecordStorage {
                 }
               }
 
+              // Migration for version < 5: separate blood collections history
+              if (oldVersion < 5) {
+                if (!Array.isArray(val.bloodCollections)) {
+                  val.bloodCollections = [];
+                  if (val.bloodInvestigationDate) {
+                    val.bloodCollections.push({
+                      id: `bld_migrated_${val.id}`,
+                      patientId: val.id,
+                      scheduledDate: val.bloodInvestigationDate,
+                      scheduledTime: 'Before 8.30 am',
+                      status: 'Scheduled',
+                      bloodInvestigations: val.bloodInvestigations || [],
+                      bloodOther: val.bloodOther,
+                      notes: 'Initial scheduled blood collection',
+                      createdAt: val.createdAt || new Date().toISOString(),
+                      updatedAt: val.updatedAt || new Date().toISOString()
+                    });
+                    val.currentBloodStatus = 'Scheduled';
+                  }
+                  modified = true;
+                }
+              }
+
               if (modified) {
                 cursor.update(val);
               }
@@ -153,13 +183,12 @@ export class IndexedDBStorage implements IRecordStorage {
     const isOtherTicked = investigations.includes('Other');
     const patientId = record.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
-    // Manage appointments
+    // Manage TCA appointments
     let appointments: TCAAppointment[] = [];
     if (Array.isArray(record.appointments) && record.appointments.length > 0) {
       appointments = record.appointments;
     } else if (existing && Array.isArray(existing.appointments) && existing.appointments.length > 0) {
       appointments = [...existing.appointments];
-      // If user provided or changed nextTca in form, check if we need to update/create scheduled appointment
       if (record.nextTca && record.nextTca.trim()) {
         const scheduledIndex = appointments.findIndex(a => a.status === 'Scheduled');
         if (scheduledIndex >= 0) {
@@ -173,7 +202,6 @@ export class IndexedDBStorage implements IRecordStorage {
             updatedAt: now
           };
         } else {
-          // Add new scheduled appointment
           appointments.push({
             id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             patientId,
@@ -204,6 +232,52 @@ export class IndexedDBStorage implements IRecordStorage {
       }];
     }
 
+    // Manage Blood Collection appointments
+    let bloodCollections: BloodCollectionAppointment[] = [];
+    if (Array.isArray(record.bloodCollections) && record.bloodCollections.length > 0) {
+      bloodCollections = record.bloodCollections;
+    } else if (existing && Array.isArray(existing.bloodCollections) && existing.bloodCollections.length > 0) {
+      bloodCollections = [...existing.bloodCollections];
+      if (record.bloodInvestigationDate && record.bloodInvestigationDate.trim()) {
+        const scheduledBldIndex = bloodCollections.findIndex(b => b.status === 'Scheduled');
+        if (scheduledBldIndex >= 0) {
+          bloodCollections[scheduledBldIndex] = {
+            ...bloodCollections[scheduledBldIndex],
+            scheduledDate: record.bloodInvestigationDate.trim(),
+            bloodInvestigations: investigations,
+            bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+            updatedAt: now
+          };
+        } else {
+          bloodCollections.push({
+            id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            patientId,
+            scheduledDate: record.bloodInvestigationDate.trim(),
+            scheduledTime: 'Before 8.30 am',
+            status: 'Scheduled',
+            bloodInvestigations: investigations,
+            bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+            notes: 'Scheduled blood collection',
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      }
+    } else if (record.bloodInvestigationDate && record.bloodInvestigationDate.trim()) {
+      bloodCollections = [{
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        patientId,
+        scheduledDate: record.bloodInvestigationDate.trim(),
+        scheduledTime: 'Before 8.30 am',
+        status: 'Scheduled',
+        bloodInvestigations: investigations,
+        bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+        notes: 'Initial blood collection',
+        createdAt: now,
+        updatedAt: now
+      }];
+    }
+
     const preRecord: any = {
       id: patientId,
       name: record.name.trim(),
@@ -212,8 +286,10 @@ export class IndexedDBStorage implements IRecordStorage {
       patientType: record.patientType || existing?.patientType || 'Existing',
       isActive: record.isActive !== undefined ? Boolean(record.isActive) : (existing?.isActive !== undefined ? existing.isActive : true),
       appointments,
+      bloodCollections,
       nextTca: record.nextTca ? record.nextTca.trim() : undefined,
       bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
+      currentBloodStatus: record.currentBloodStatus || existing?.currentBloodStatus,
       bloodInvestigations: investigations,
       bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
       plan: record.plan ? record.plan.trim() : undefined,
@@ -330,14 +406,13 @@ export class IndexedDBStorage implements IRecordStorage {
   }
 
   public normalizeRecord(raw: any): PatientRecord {
-    // If legacy bloodInvestigationsPlan is present and plan is absent, migrate it
     const plan = raw.plan !== undefined ? raw.plan : (raw.bloodInvestigationsPlan || undefined);
     const investigations = Array.isArray(raw.bloodInvestigations) ? raw.bloodInvestigations : [];
     const isOther = investigations.includes('Other');
     const isActive = raw.isActive !== undefined ? Boolean(raw.isActive) : true;
     const patientId = raw.id;
 
-    // Normalize appointments array
+    // Normalize TCA appointments
     let appointments: TCAAppointment[] = [];
     if (Array.isArray(raw.appointments) && raw.appointments.length > 0) {
       appointments = raw.appointments.map((apt: any) => {
@@ -376,7 +451,46 @@ export class IndexedDBStorage implements IRecordStorage {
       }];
     }
 
-    // Determine latest upcoming scheduled appointment for fast top-level access
+    // Normalize Blood Collection appointments
+    let bloodCollections: BloodCollectionAppointment[] = [];
+    if (Array.isArray(raw.bloodCollections) && raw.bloodCollections.length > 0) {
+      bloodCollections = raw.bloodCollections.map((b: any) => {
+        const bInvs = Array.isArray(b.bloodInvestigations) ? b.bloodInvestigations : investigations;
+        const isBOther = bInvs.includes('Other');
+        return {
+          id: b.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`),
+          patientId: b.patientId || patientId,
+          scheduledDate: (b.scheduledDate || '').trim(),
+          scheduledTime: b.scheduledTime || 'Before 8.30 am',
+          status: b.status || 'Scheduled',
+          actualCollectionDate: b.actualCollectionDate,
+          actualCollectionTime: b.actualCollectionTime,
+          bloodInvestigations: bInvs,
+          bloodOther: isBOther && b.bloodOther ? b.bloodOther.trim() : undefined,
+          notes: b.notes ? b.notes.trim() : undefined,
+          rescheduledReason: b.rescheduledReason ? b.rescheduledReason.trim() : undefined,
+          rescheduledToId: b.rescheduledToId,
+          rescheduledFromId: b.rescheduledFromId,
+          createdAt: b.createdAt || raw.createdAt || new Date().toISOString(),
+          updatedAt: b.updatedAt || raw.updatedAt || new Date().toISOString()
+        };
+      });
+    } else if (raw.bloodInvestigationDate && typeof raw.bloodInvestigationDate === 'string' && raw.bloodInvestigationDate.trim()) {
+      bloodCollections = [{
+        id: `bld_migrated_${patientId}`,
+        patientId,
+        scheduledDate: raw.bloodInvestigationDate.trim(),
+        scheduledTime: 'Before 8.30 am',
+        status: 'Scheduled',
+        bloodInvestigations: investigations,
+        bloodOther: isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined,
+        notes: 'Initial scheduled blood collection',
+        createdAt: raw.createdAt || new Date().toISOString(),
+        updatedAt: raw.updatedAt || new Date().toISOString()
+      }];
+    }
+
+    // Determine latest upcoming scheduled TCA appointment for fast top-level access
     const scheduledApts = appointments.filter(a => a.status === 'Scheduled');
     let activeApt: TCAAppointment | undefined;
 
@@ -391,10 +505,29 @@ export class IndexedDBStorage implements IRecordStorage {
       }
     }
 
+    // Determine latest upcoming scheduled Blood Collection appointment
+    const scheduledBld = bloodCollections.filter(b => b.status === 'Scheduled');
+    let activeBld: BloodCollectionAppointment | undefined;
+
+    if (scheduledBld.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const upcoming = scheduledBld.filter(b => b.scheduledDate >= today).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+      if (upcoming.length > 0) {
+        activeBld = upcoming[0];
+      } else {
+        const overdue = [...scheduledBld].sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+        activeBld = overdue[0];
+      }
+    }
+
     const nextTca = activeApt ? activeApt.tcaDate : undefined;
-    const bloodDate = activeApt ? activeApt.bloodInvestigationDate : (raw.bloodInvestigationDate ? raw.bloodInvestigationDate.trim() : undefined);
-    const activeInvs = activeApt ? activeApt.bloodInvestigations : investigations;
-    const activeOther = activeApt ? activeApt.bloodOther : (isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined);
+    const bloodDate = activeBld ? activeBld.scheduledDate : (raw.bloodInvestigationDate ? raw.bloodInvestigationDate.trim() : undefined);
+    const currentBloodStatus: BloodCollectionStatus | undefined = activeBld
+      ? activeBld.status
+      : (bloodCollections.length > 0 ? bloodCollections[bloodCollections.length - 1].status : undefined);
+
+    const activeInvs = activeBld ? activeBld.bloodInvestigations : (activeApt ? activeApt.bloodInvestigations : investigations);
+    const activeOther = activeBld ? activeBld.bloodOther : (activeApt ? activeApt.bloodOther : (isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined));
     const activePlan = activeApt && activeApt.plan ? activeApt.plan : (plan ? plan.trim() : undefined);
 
     return {
@@ -405,8 +538,10 @@ export class IndexedDBStorage implements IRecordStorage {
       patientType: (raw.patientType as PatientType) || 'Existing',
       isActive,
       appointments,
+      bloodCollections,
       nextTca,
       bloodInvestigationDate: bloodDate,
+      currentBloodStatus,
       bloodInvestigations: activeInvs,
       bloodOther: activeOther,
       plan: activePlan,
@@ -415,6 +550,7 @@ export class IndexedDBStorage implements IRecordStorage {
     };
   }
 
+  // --- TCA Appointment Methods ---
   async addAppointment(
     patientId: string,
     aptData: Omit<TCAAppointment, 'id' | 'patientId' | 'createdAt' | 'updatedAt'>
@@ -530,6 +666,131 @@ export class IndexedDBStorage implements IRecordStorage {
     });
 
     return { oldApt, newApt };
+  }
+
+  // --- Blood Collection Methods (Requirement 1 & 2) ---
+  async addBloodCollection(
+    patientId: string,
+    data: {
+      scheduledDate: string;
+      scheduledTime?: string;
+      bloodInvestigations?: string[];
+      bloodOther?: string;
+      notes?: string;
+    }
+  ): Promise<BloodCollectionAppointment> {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const now = new Date().toISOString();
+    const bldId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newBld: BloodCollectionAppointment = {
+      id: bldId,
+      patientId,
+      scheduledDate: data.scheduledDate.trim(),
+      scheduledTime: data.scheduledTime || 'Before 8.30 am',
+      status: 'Scheduled',
+      bloodInvestigations: Array.isArray(data.bloodInvestigations) ? data.bloodInvestigations : (patient.bloodInvestigations || []),
+      bloodOther: data.bloodOther || patient.bloodOther,
+      notes: data.notes ? data.notes.trim() : undefined,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const bloodCollections = [...(patient.bloodCollections || []), newBld];
+    await this.save({
+      ...patient,
+      bloodCollections
+    });
+
+    return newBld;
+  }
+
+  async updateBloodCollectionStatus(
+    patientId: string,
+    collectionId: string,
+    newStatus: BloodCollectionStatus,
+    actualDate?: string,
+    actualTime?: string,
+    notes?: string
+  ): Promise<BloodCollectionAppointment> {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const collections = [...(patient.bloodCollections || [])];
+    const index = collections.findIndex(c => c.id === collectionId);
+    if (index === -1) throw new Error(`Blood collection ${collectionId} not found`);
+
+    const now = new Date().toISOString();
+    const updatedCollection: BloodCollectionAppointment = {
+      ...collections[index],
+      status: newStatus,
+      actualCollectionDate: newStatus === 'Attended' ? (actualDate || new Date().toISOString().slice(0, 10)) : collections[index].actualCollectionDate,
+      actualCollectionTime: newStatus === 'Attended' ? (actualTime || '08:15 AM') : collections[index].actualCollectionTime,
+      notes: notes !== undefined ? notes : collections[index].notes,
+      updatedAt: now
+    };
+
+    collections[index] = updatedCollection;
+
+    await this.save({
+      ...patient,
+      bloodCollections: collections
+    });
+
+    return updatedCollection;
+  }
+
+  async rescheduleBloodCollection(
+    patientId: string,
+    oldCollectionId: string,
+    newDate: string,
+    reason?: string,
+    time?: string
+  ): Promise<{ oldCollection: BloodCollectionAppointment; nextCollection: BloodCollectionAppointment }> {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const collections = [...(patient.bloodCollections || [])];
+    const oldIndex = collections.findIndex(c => c.id === oldCollectionId);
+    if (oldIndex === -1) throw new Error(`Blood collection ${oldCollectionId} not found`);
+
+    const now = new Date().toISOString();
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    // Mark old collection as Rescheduled
+    const oldCollection: BloodCollectionAppointment = {
+      ...collections[oldIndex],
+      status: 'Rescheduled',
+      rescheduledReason: reason ? reason.trim() : 'Rescheduled to new date',
+      rescheduledToId: newId,
+      updatedAt: now
+    };
+    collections[oldIndex] = oldCollection;
+
+    // Create new collection appointment
+    const nextCollection: BloodCollectionAppointment = {
+      id: newId,
+      patientId,
+      scheduledDate: newDate.trim(),
+      scheduledTime: time || oldCollection.scheduledTime || 'Before 8.30 am',
+      status: 'Scheduled',
+      bloodInvestigations: [...oldCollection.bloodInvestigations],
+      bloodOther: oldCollection.bloodOther,
+      notes: reason ? `Rescheduled from ${oldCollection.scheduledDate}: ${reason.trim()}` : `Rescheduled from ${oldCollection.scheduledDate}`,
+      rescheduledFromId: oldCollectionId,
+      createdAt: now,
+      updatedAt: now
+    };
+    collections.push(nextCollection);
+
+    // Save patient profile — preserves all patient data, TCA appointments, investigations!
+    await this.save({
+      ...patient,
+      bloodCollections: collections
+    });
+
+    return { oldCollection, nextCollection };
   }
 
   async setPatientActiveStatus(patientId: string, isActive: boolean): Promise<PatientRecord> {

@@ -78,11 +78,15 @@ const modulesInOrder = [
   'components/toast',
   'components/confirm-sheet',
   'utils/export-import',
+  'utils/google-drive',
+  'components/blood-collection-modal',
   'components/record-card',
   'components/sort-sheet',
   'components/record-modal',
   'components/appointment-modal',
   'components/details-modal',
+  'components/message-generator',
+  'components/settings-modal',
   'components/data-modal',
   'components/nav-bar',
   'components/tca-view',
@@ -139,8 +143,37 @@ console.log('Creating production dist/ folder...');
 const distDir = path.join(rootDir, 'dist');
 ensureDir(distDir);
 
+// Generate standalone production index.html referencing compiled bundles
+const prodIndexHtml = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="ARV KKBK - Antiretroviral Personal Record Tracker" />
+
+    <!-- iOS Safari PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="ARV KKBK" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="theme-color" content="#F2F2F7" />
+
+    <!-- Icons & Manifest -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+
+    <link rel="stylesheet" href="./app.bundle.css" />
+    <title>ARV KKBK</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="./app.bundle.js"></script>
+  </body>
+</html>`;
+fs.writeFileSync(path.join(distDir, 'index.html'), prodIndexHtml, 'utf-8');
+
 const filesToCopyToDist = [
-  'index.html',
   'app.bundle.js',
   'app.bundle.css',
   'sw.js',

@@ -3,15 +3,24 @@ export const DEFAULT_THEME            = 'system';
 
 class ThemeManager {
           currentMode            = DEFAULT_THEME;
-          mediaQuery                 = window.matchMedia('(prefers-color-scheme: dark)');
+          mediaQuery                        = null;
 
   constructor() {
-    this.currentMode = this.getSavedTheme();
-    this.mediaQuery.addEventListener('change', () => {
-      if (this.currentMode === 'system') {
-        this.applyTheme();
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      try {
+        this.mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        if (this.mediaQuery && typeof this.mediaQuery.addEventListener === 'function') {
+          this.mediaQuery.addEventListener('change', () => {
+            if (this.currentMode === 'system') {
+              this.applyTheme();
+            }
+          });
+        }
+      } catch {
+        this.mediaQuery = null;
       }
-    });
+    }
+    this.currentMode = this.getSavedTheme();
   }
 
   getSavedTheme()            {
@@ -33,7 +42,7 @@ class ThemeManager {
   isDark()          {
     if (this.currentMode === 'dark') return true;
     if (this.currentMode === 'light') return false;
-    return this.mediaQuery.matches;
+    return this.mediaQuery ? Boolean(this.mediaQuery.matches) : false;
   }
 
   setTheme(mode           )       {

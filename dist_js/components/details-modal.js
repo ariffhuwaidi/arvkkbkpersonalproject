@@ -1,8 +1,16 @@
-                                                                                              
+             
+                
+                 
+              
+                    
+                             
+                       
+                  
+                                                                 
 import { getTCAStatus, formatDisplayDate, isDatePast } from '../utils/date.js';
 
 function escapeHTML(str        )         {
-  return str
+  return (str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -18,6 +26,9 @@ function escapeHTML(str        )         {
                                                  
                                                                                 
                                                                                                           
+                              
+                                                                                                                    
+                                                              
  
 
 export class DetailsModal {
@@ -34,7 +45,7 @@ export class DetailsModal {
     this.overlayEl.setAttribute('aria-label', 'Patient Profile');
 
     this.overlayEl.innerHTML = `
-      <div class="bottom-sheet profile-modal" style="max-width: 620px;">
+      <div class="bottom-sheet profile-modal" style="max-width: 660px;">
         <div class="sheet-grab-bar"></div>
         <div class="sheet-header">
           <span class="sheet-title">Patient Profile</span>
@@ -171,12 +182,13 @@ export class DetailsModal {
          </a>`
       : '<span style="color: var(--color-text-tertiary); font-style: italic;">None</span>';
 
-    // Appointments parsing: Upcoming (Scheduled) vs History (Attended, DNA, Rescheduled, Cancelled)
+    // -------------------------------------------------------------
+    // TCA Appointments: Upcoming (Scheduled) vs History
+    // -------------------------------------------------------------
     const appointments                   = Array.isArray(record.appointments) ? record.appointments : [];
     const scheduledApts = appointments.filter(a => a.status === 'Scheduled');
     const historicalApts = appointments.filter(a => a.status !== 'Scheduled').sort((a, b) => b.tcaDate.localeCompare(a.tcaDate));
 
-    // Sort scheduled appointments (earliest first)
     scheduledApts.sort((a, b) => a.tcaDate.localeCompare(b.tcaDate));
     const nextApt = scheduledApts.length > 0 ? scheduledApts[0] : null;
 
@@ -187,7 +199,6 @@ export class DetailsModal {
       const isOverdue = tcaStatus.type === 'overdue';
       const formattedDate = formatDisplayDate(nextApt.tcaDate);
 
-      // Overdue alert banner if required
       let overdueBanner = '';
       if (isOverdue) {
         overdueBanner = `
@@ -197,12 +208,11 @@ export class DetailsModal {
               <line x1="12" y1="9" x2="12" y2="13"></line>
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
-            <span><strong>Overdue Appointment: Action Required.</strong> Record patient attendance, mark DNA, or reschedule.</span>
+            <span><strong>Overdue TCA Appointment: Action Required.</strong> Record patient attendance, mark DNA, or reschedule.</span>
           </div>
         `;
       }
 
-      // Blood date
       let bloodFormatted = 'None';
       let bloodBadgeHtml = '';
       if (nextApt.bloodInvestigationDate) {
@@ -212,7 +222,6 @@ export class DetailsModal {
         }
       }
 
-      // Blood investigations
       let invsHtml = '<span style="color: var(--color-text-tertiary); font-style: italic;">None selected</span>';
       if (nextApt.bloodInvestigations && nextApt.bloodInvestigations.length > 0) {
         const chips = nextApt.bloodInvestigations.map(inv => {
@@ -222,7 +231,6 @@ export class DetailsModal {
         invsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
       }
 
-      // Plan & notes
       const planHtml = nextApt.plan && nextApt.plan.trim()
         ? `<div class="detail-plan-box">${escapeHTML(nextApt.plan)}</div>`
         : '<span style="color: var(--color-text-tertiary); font-style: italic;">No specific plan recorded</span>';
@@ -295,7 +303,7 @@ export class DetailsModal {
 
           <div style="margin-top: 12px; text-align: right;">
             <button type="button" id="btn-create-extra-tca" class="btn-secondary" style="font-size: 13px; padding: 6px 12px;">
-              + Schedule Another Appointment
+              + Schedule Another TCA Appointment
             </button>
           </div>
         </div>
@@ -306,7 +314,7 @@ export class DetailsModal {
           <div class="profile-section-title">A. Upcoming Scheduled TCA</div>
           <div style="padding: 16px; text-align: center; color: var(--color-text-secondary); background-color: var(--color-bg-secondary); border-radius: var(--radius-md);">
             <p style="font-size: 14.5px; font-weight: 500; margin-bottom: 6px;">No Upcoming TCA Scheduled</p>
-            <p style="font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 12px;">Patient does not have an active scheduled appointment.</p>
+            <p style="font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 12px;">Patient does not have an active scheduled clinic TCA appointment.</p>
             <button type="button" id="btn-schedule-new-tca" class="btn-primary" style="font-size: 14px; padding: 8px 18px;">
               + Schedule TCA Appointment
             </button>
@@ -373,7 +381,7 @@ export class DetailsModal {
     } else {
       historyItemsHtml = `
         <div style="padding: 14px; text-align: center; color: var(--color-text-tertiary); font-style: italic; font-size: 13.5px;">
-          No previous appointment history recorded for this patient.
+          No previous TCA appointment history recorded for this patient.
         </div>
       `;
     }
@@ -389,6 +397,238 @@ export class DetailsModal {
       </div>
     `;
 
+    // -------------------------------------------------------------
+    // Blood Collection Appointments: Upcoming vs History
+    // -------------------------------------------------------------
+    const bloodCollections                               = Array.isArray(record.bloodCollections) && record.bloodCollections.length > 0
+      ? [...record.bloodCollections]
+      : (record.bloodInvestigationDate
+          ? [{
+              id: 'bld-synth-' + record.id,
+              patientId: record.id,
+              scheduledDate: record.bloodInvestigationDate,
+              status: record.currentBloodStatus || 'Scheduled',
+              investigations: record.bloodInvestigations || [],
+              investigationOther: record.bloodOther,
+              notes: record.notes,
+              createdAt: record.createdAt,
+              updatedAt: record.updatedAt
+            }]
+          : []);
+
+    const scheduledBld = bloodCollections.filter(b => b.status === 'Scheduled').sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+    const nextBld = scheduledBld.length > 0 ? scheduledBld[0] : null;
+    const historicalBld = bloodCollections.filter(b => b.status !== 'Scheduled').sort((a, b) => {
+      const dateA = a.actualCollectionDate || a.scheduledDate;
+      const dateB = b.actualCollectionDate || b.scheduledDate;
+      return dateB.localeCompare(dateA);
+    });
+
+    // Facility Routing Notice
+    const labRoutingNoticeHtml = `
+      <div class="lab-routing-notice" style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; padding: 10px 12px; background: var(--color-bg-primary); border: 0.5px solid var(--color-separator); border-left: 3px solid var(--color-accent); border-radius: var(--radius-md); margin-bottom: 12px; line-height: 1.45;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px; color: var(--color-accent);">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <div>
+          <strong>Collection & Laboratory Routing:</strong> All blood samples are collected on-site at <strong>KK Bandar Kulim</strong>. CD4 samples are dispatched to <strong>KK Taman Intan</strong>; HIV Viral Load samples are dispatched to <strong>Hospital Sultanah Bahiyah (HSB)</strong>. Receiving facilities are not patient collection locations.
+        </div>
+      </div>
+    `;
+
+    // SECTION C: Upcoming Blood Collection HTML
+    let upcomingBloodSectionHtml = '';
+    if (nextBld) {
+      const isOverdue = isDatePast(nextBld.scheduledDate);
+      const formattedDate = formatDisplayDate(nextBld.scheduledDate);
+      const timeDisplay = nextBld.scheduledTime ? `at ${escapeHTML(nextBld.scheduledTime)}` : '';
+
+      let overdueBanner = '';
+      if (isOverdue) {
+        overdueBanner = `
+          <div class="overdue-action-required-banner">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span><strong>Blood Collection Overdue: Action Required.</strong> Record sample collection, mark DNA, or reschedule.</span>
+          </div>
+        `;
+      }
+
+      let invsHtml = '<span style="color: var(--color-text-tertiary); font-style: italic;">None specified</span>';
+      if (nextBld.investigations && nextBld.investigations.length > 0) {
+        const chips = nextBld.investigations.map(inv => {
+          const text = inv === 'Other' && nextBld.investigationOther ? `Other: ${nextBld.investigationOther}` : inv;
+          return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHTML(text)}</span>`;
+        }).join('');
+        invsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
+      }
+
+      const notesHtml = nextBld.notes && nextBld.notes.trim()
+        ? `<div style="font-size: 13px; color: var(--color-text-secondary); margin-top: 4px;"><em>Note: ${escapeHTML(nextBld.notes)}</em></div>`
+        : '';
+
+      upcomingBloodSectionHtml = `
+        <div class="profile-section-card ${isOverdue ? 'has-overdue' : ''}">
+          <div class="profile-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+            <span>C. Upcoming Blood Collection</span>
+            <span class="appointment-status-badge badge-scheduled">Scheduled</span>
+          </div>
+          ${overdueBanner}
+          ${labRoutingNoticeHtml}
+
+          <div class="profile-row-item">
+            <span class="profile-row-label">Scheduled Date</span>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="profile-row-value" style="font-size: 16px; font-weight: 700;">${formattedDate} ${timeDisplay}</span>
+              ${isOverdue ? `<span class="blood-status-note overdue">(Overdue)</span>` : ''}
+            </div>
+          </div>
+          <div class="profile-row-item" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+            <span class="profile-row-label">Investigations to Perform:</span>
+            ${invsHtml}
+          </div>
+          ${notesHtml ? `<div class="profile-row-item" style="flex-direction: column; align-items: flex-start; gap: 6px;"><span class="profile-row-label">Staff Notes:</span>${notesHtml}</div>` : ''}
+
+          <!-- Blood Collection Actions -->
+          <div class="upcoming-tca-actions" style="margin-top: 14px;">
+            <button type="button" class="btn-action-attended" data-blood-action="attend" data-bld-id="${nextBld.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Mark Attended (Sample Collected)
+            </button>
+            <button type="button" class="btn-action-dna" data-blood-action="dna" data-bld-id="${nextBld.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+              Mark DNA
+            </button>
+            <button type="button" class="btn-action-reschedule" data-blood-action="reschedule" data-bld-id="${nextBld.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+              Reschedule Blood Date
+            </button>
+            <button type="button" class="btn-action-cancel" data-blood-action="cancel" data-bld-id="${nextBld.id}">
+              Cancel
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      upcomingBloodSectionHtml = `
+        <div class="profile-section-card">
+          <div class="profile-section-title">C. Upcoming Blood Collection</div>
+          ${labRoutingNoticeHtml}
+          <div style="padding: 16px; text-align: center; color: var(--color-text-secondary); background-color: var(--color-bg-secondary); border-radius: var(--radius-md);">
+            <p style="font-size: 14.5px; font-weight: 500; margin-bottom: 6px;">No Upcoming Blood Collection Scheduled</p>
+            <p style="font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 12px;">Patient does not have an active scheduled blood collection appointment.</p>
+            <button type="button" id="btn-schedule-new-blood" class="btn-primary" style="font-size: 14px; padding: 8px 18px;">
+              + Schedule Blood Collection
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // SECTION D: Blood Collection History HTML
+    let bloodHistoryItemsHtml = '';
+    if (historicalBld.length > 0) {
+      bloodHistoryItemsHtml = historicalBld.map(bld => {
+        const scheduledFormatted = formatDisplayDate(bld.scheduledDate);
+        let statusClass = 'badge-cancelled';
+        let statusLabel         = bld.status;
+
+        if (bld.status === 'Attended') {
+          statusClass = 'badge-attended';
+          statusLabel = 'Attended (Sample Collected)';
+        } else if (bld.status === 'DNA') {
+          statusClass = 'badge-dna';
+          statusLabel = 'Did Not Attend (DNA)';
+        } else if (bld.status === 'Rescheduled') {
+          statusClass = 'badge-rescheduled';
+          statusLabel = 'Rescheduled';
+        } else if (bld.status === 'Cancelled') {
+          statusClass = 'badge-cancelled';
+          statusLabel = 'Cancelled';
+        }
+
+        let actualCollectionInfo = '';
+        if (bld.status === 'Attended' && bld.actualCollectionDate) {
+          const actDate = formatDisplayDate(bld.actualCollectionDate);
+          const actTime = bld.actualCollectionTime ? `at ${escapeHTML(bld.actualCollectionTime)}` : '';
+          actualCollectionInfo = `
+            <div style="font-size: 13px; color: #248A3D; font-weight: 500; margin-top: 4px;">
+              Actual Collection: ${actDate} ${actTime} (Sample Collected at KK Bandar Kulim)
+            </div>
+          `;
+        }
+
+        let reschedNotice = '';
+        if (bld.status === 'Rescheduled') {
+          const reasonText = bld.rescheduledReason ? ` - Reason: ${escapeHTML(bld.rescheduledReason)}` : '';
+          reschedNotice = `<div style="font-size: 12px; color: #5856D6; font-weight: 500; margin-top: 4px;">Rescheduled to new appointment${reasonText}</div>`;
+        }
+
+        let invsChips = '';
+        if (bld.investigations && bld.investigations.length > 0) {
+          const chips = bld.investigations.map(inv => {
+            const text = inv === 'Other' && bld.investigationOther ? `Other: ${bld.investigationOther}` : inv;
+            return `<span class="mini-chip" style="font-size: 11.5px; padding: 2px 7px;">${escapeHTML(text)}</span>`;
+          }).join('');
+          invsChips = `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">${chips}</div>`;
+        }
+
+        let notesText = '';
+        if (bld.notes && bld.notes.trim()) {
+          notesText = `<div style="font-size: 12.5px; color: var(--color-text-tertiary); margin-top: 4px;"><em>Notes: ${escapeHTML(bld.notes)}</em></div>`;
+        }
+
+        return `
+          <div class="tca-history-item">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="tca-history-date">Scheduled: ${scheduledFormatted}</span>
+              </div>
+              <span class="appointment-status-badge ${statusClass}">${escapeHTML(statusLabel)}</span>
+            </div>
+            ${actualCollectionInfo}
+            ${reschedNotice}
+            ${invsChips}
+            ${notesText}
+          </div>
+        `;
+      }).join('');
+    } else {
+      bloodHistoryItemsHtml = `
+        <div style="padding: 14px; text-align: center; color: var(--color-text-tertiary); font-style: italic; font-size: 13.5px;">
+          No previous blood collection history recorded for this patient.
+        </div>
+      `;
+    }
+
+    const bloodHistorySectionHtml = `
+      <div class="profile-section-card">
+        <div class="profile-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+          <span>D. Blood Collection History (${historicalBld.length} past records)</span>
+        </div>
+        <div class="tca-history-list">
+          ${bloodHistoryItemsHtml}
+        </div>
+      </div>
+    `;
+
+    // -------------------------------------------------------------
+    // Full Profile Assembly
+    // -------------------------------------------------------------
     contentEl.innerHTML = `
       <div class="profile-group-wrapper">
         ${activeBannerHtml}
@@ -430,6 +670,12 @@ export class DetailsModal {
 
         <!-- Section B: TCA History -->
         ${historySectionHtml}
+
+        <!-- Section C: Upcoming Blood Collection -->
+        ${upcomingBloodSectionHtml}
+
+        <!-- Section D: Blood Collection History -->
+        ${bloodHistorySectionHtml}
       </div>
     `;
 
@@ -453,7 +699,17 @@ export class DetailsModal {
       }
     });
 
-    // Upcoming action buttons
+    contentEl.querySelector('#btn-schedule-new-blood')?.addEventListener('click', () => {
+      if (this.currentRecord && this.handlers) {
+        if (this.handlers.onScheduleBloodCollection) {
+          this.handlers.onScheduleBloodCollection(this.currentRecord);
+        } else {
+          this.handlers.onScheduleTca(this.currentRecord);
+        }
+      }
+    });
+
+    // Upcoming TCA action buttons
     contentEl.querySelectorAll('[data-action]').forEach(btn => {
       const action = btn.getAttribute('data-action');
       const aptId = btn.getAttribute('data-apt-id');
@@ -469,6 +725,20 @@ export class DetailsModal {
           this.handlers.onRescheduleTca(this.currentRecord, nextApt);
         } else if (action === 'cancel') {
           this.handlers.onUpdateStatus(this.currentRecord, nextApt, 'Cancelled');
+        }
+      });
+    });
+
+    // Upcoming Blood Collection action buttons
+    contentEl.querySelectorAll('[data-blood-action]').forEach(btn => {
+      const bldAction = btn.getAttribute('data-blood-action')                    ;
+      const bldId = btn.getAttribute('data-bld-id');
+      if (!bldAction || !bldId || !nextBld) return;
+
+      btn.addEventListener('click', () => {
+        if (!this.currentRecord || !this.handlers) return;
+        if (this.handlers.onBloodAction) {
+          this.handlers.onBloodAction(this.currentRecord, nextBld, bldAction);
         }
       });
     });

@@ -24,6 +24,26 @@
                     
  
 
+                                                                                                   
+
+                                             
+                             
+                    
+                                                  
+                                                                
+                                
+                                                                           
+                                                   
+                                                                               
+                      
+                 
+                             
+                           
+                             
+                    
+                    
+ 
+
 export const BLOOD_INVESTIGATION_OPTIONS = [
   'VL',
   'CD4',
@@ -46,11 +66,13 @@ export const BLOOD_INVESTIGATION_OPTIONS = [
                  
                                                                    
                                                                           
-                                                                  
+                                                                      
+                                                                                       
 
                                                                                            
                                              
-                                                            
+                                                                                                   
+                                                                                
                                                                                
                                                              
                                                  
@@ -101,8 +123,54 @@ export const BLOOD_INVESTIGATION_OPTIONS = [
                                                  
                                                                                                                                     
                                        
+                                                                                   
                          
-                                                                                              
  
 
-export {};
+// Google Drive Integration Types
+                                     
+                   
+               
+                
+                       
+                    
+
+                                        
+             
+               
+                      
+                
+ 
+
+                                    
+                   
+                    
+                    
+ 
+
+// Message Generator Types
+                                 
+                      
+                    
+                  
+                        
+                      
+             
+
+                                                           
+
+                                         
+                                    
+                    
+                       
+                 
+                         
+                   
+                   
+                
+                  
+                   
+                        
+                         
+                     
+ 

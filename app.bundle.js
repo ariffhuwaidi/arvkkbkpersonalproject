@@ -28,6 +28,26 @@
                     
  
 
+                                                                                                   
+
+                                             
+                             
+                    
+                                                  
+                                                                
+                                
+                                                                           
+                                                   
+                                                                               
+                      
+                 
+                             
+                           
+                             
+                    
+                    
+ 
+
 const BLOOD_INVESTIGATION_OPTIONS = [
   'VL',
   'CD4',
@@ -50,11 +70,13 @@ const BLOOD_INVESTIGATION_OPTIONS = [
                  
                                                                    
                                                                           
-                                                                  
+                                                                      
+                                                                                       
 
                                                                                            
                                              
-                                                            
+                                                                                                   
+                                                                                
                                                                                
                                                              
                                                  
@@ -105,11 +127,57 @@ const BLOOD_INVESTIGATION_OPTIONS = [
                                                  
                                                                                                                                     
                                        
+                                                                                   
                          
-                                                                                              
  
 
+// Google Drive Integration Types
+                                     
+                   
+               
+                
+                       
+                    
 
+                                        
+             
+               
+                      
+                
+ 
+
+                                    
+                   
+                    
+                    
+ 
+
+// Message Generator Types
+                                 
+                      
+                    
+                  
+                        
+                      
+             
+
+                                                           
+
+                                         
+                                    
+                    
+                       
+                 
+                         
+                   
+                   
+                
+                  
+                   
+                        
+                         
+                     
+ 
 
 
   // --- Module: storage/storage-interface ---
@@ -306,15 +374,24 @@ const DEFAULT_THEME            = 'system';
 
 class ThemeManager {
           currentMode            = DEFAULT_THEME;
-          mediaQuery                 = window.matchMedia('(prefers-color-scheme: dark)');
+          mediaQuery                        = null;
 
   constructor() {
-    this.currentMode = this.getSavedTheme();
-    this.mediaQuery.addEventListener('change', () => {
-      if (this.currentMode === 'system') {
-        this.applyTheme();
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      try {
+        this.mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        if (this.mediaQuery && typeof this.mediaQuery.addEventListener === 'function') {
+          this.mediaQuery.addEventListener('change', () => {
+            if (this.currentMode === 'system') {
+              this.applyTheme();
+            }
+          });
+        }
+      } catch {
+        this.mediaQuery = null;
       }
-    });
+    }
+    this.currentMode = this.getSavedTheme();
   }
 
   getSavedTheme()            {
@@ -336,7 +413,7 @@ class ThemeManager {
   isDark()          {
     if (this.currentMode === 'dark') return true;
     if (this.currentMode === 'light') return false;
-    return this.mediaQuery.matches;
+    return this.mediaQuery ? Boolean(this.mediaQuery.matches) : false;
   }
 
   setTheme(mode           )       {
@@ -876,10 +953,17 @@ function generateDemoRecords()                  {
 
 
   // --- Module: storage/indexeddb-storage ---
-                                                                                           
+             
+                
+                 
+              
+                 
+                             
+                       
+                  
 
 const DB_NAME = 'arv_kkbk_db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_NAME = 'records';
 
 class IndexedDBStorage                           {
@@ -965,6 +1049,29 @@ class IndexedDBStorage                           {
                 }
               }
 
+              // Migration for version < 5: separate blood collections history
+              if (oldVersion < 5) {
+                if (!Array.isArray(val.bloodCollections)) {
+                  val.bloodCollections = [];
+                  if (val.bloodInvestigationDate) {
+                    val.bloodCollections.push({
+                      id: `bld_migrated_${val.id}`,
+                      patientId: val.id,
+                      scheduledDate: val.bloodInvestigationDate,
+                      scheduledTime: 'Before 8.30 am',
+                      status: 'Scheduled',
+                      bloodInvestigations: val.bloodInvestigations || [],
+                      bloodOther: val.bloodOther,
+                      notes: 'Initial scheduled blood collection',
+                      createdAt: val.createdAt || new Date().toISOString(),
+                      updatedAt: val.updatedAt || new Date().toISOString()
+                    });
+                    val.currentBloodStatus = 'Scheduled';
+                  }
+                  modified = true;
+                }
+              }
+
               if (modified) {
                 cursor.update(val);
               }
@@ -1031,13 +1138,12 @@ class IndexedDBStorage                           {
     const isOtherTicked = investigations.includes('Other');
     const patientId = record.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
-    // Manage appointments
+    // Manage TCA appointments
     let appointments                   = [];
     if (Array.isArray(record.appointments) && record.appointments.length > 0) {
       appointments = record.appointments;
     } else if (existing && Array.isArray(existing.appointments) && existing.appointments.length > 0) {
       appointments = [...existing.appointments];
-      // If user provided or changed nextTca in form, check if we need to update/create scheduled appointment
       if (record.nextTca && record.nextTca.trim()) {
         const scheduledIndex = appointments.findIndex(a => a.status === 'Scheduled');
         if (scheduledIndex >= 0) {
@@ -1051,7 +1157,6 @@ class IndexedDBStorage                           {
             updatedAt: now
           };
         } else {
-          // Add new scheduled appointment
           appointments.push({
             id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             patientId,
@@ -1082,6 +1187,52 @@ class IndexedDBStorage                           {
       }];
     }
 
+    // Manage Blood Collection appointments
+    let bloodCollections                               = [];
+    if (Array.isArray(record.bloodCollections) && record.bloodCollections.length > 0) {
+      bloodCollections = record.bloodCollections;
+    } else if (existing && Array.isArray(existing.bloodCollections) && existing.bloodCollections.length > 0) {
+      bloodCollections = [...existing.bloodCollections];
+      if (record.bloodInvestigationDate && record.bloodInvestigationDate.trim()) {
+        const scheduledBldIndex = bloodCollections.findIndex(b => b.status === 'Scheduled');
+        if (scheduledBldIndex >= 0) {
+          bloodCollections[scheduledBldIndex] = {
+            ...bloodCollections[scheduledBldIndex],
+            scheduledDate: record.bloodInvestigationDate.trim(),
+            bloodInvestigations: investigations,
+            bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+            updatedAt: now
+          };
+        } else {
+          bloodCollections.push({
+            id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            patientId,
+            scheduledDate: record.bloodInvestigationDate.trim(),
+            scheduledTime: 'Before 8.30 am',
+            status: 'Scheduled',
+            bloodInvestigations: investigations,
+            bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+            notes: 'Scheduled blood collection',
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      }
+    } else if (record.bloodInvestigationDate && record.bloodInvestigationDate.trim()) {
+      bloodCollections = [{
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        patientId,
+        scheduledDate: record.bloodInvestigationDate.trim(),
+        scheduledTime: 'Before 8.30 am',
+        status: 'Scheduled',
+        bloodInvestigations: investigations,
+        bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
+        notes: 'Initial blood collection',
+        createdAt: now,
+        updatedAt: now
+      }];
+    }
+
     const preRecord      = {
       id: patientId,
       name: record.name.trim(),
@@ -1090,8 +1241,10 @@ class IndexedDBStorage                           {
       patientType: record.patientType || existing?.patientType || 'Existing',
       isActive: record.isActive !== undefined ? Boolean(record.isActive) : (existing?.isActive !== undefined ? existing.isActive : true),
       appointments,
+      bloodCollections,
       nextTca: record.nextTca ? record.nextTca.trim() : undefined,
       bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
+      currentBloodStatus: record.currentBloodStatus || existing?.currentBloodStatus,
       bloodInvestigations: investigations,
       bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
       plan: record.plan ? record.plan.trim() : undefined,
@@ -1208,14 +1361,13 @@ class IndexedDBStorage                           {
   }
 
          normalizeRecord(raw     )                {
-    // If legacy bloodInvestigationsPlan is present and plan is absent, migrate it
     const plan = raw.plan !== undefined ? raw.plan : (raw.bloodInvestigationsPlan || undefined);
     const investigations = Array.isArray(raw.bloodInvestigations) ? raw.bloodInvestigations : [];
     const isOther = investigations.includes('Other');
     const isActive = raw.isActive !== undefined ? Boolean(raw.isActive) : true;
     const patientId = raw.id;
 
-    // Normalize appointments array
+    // Normalize TCA appointments
     let appointments                   = [];
     if (Array.isArray(raw.appointments) && raw.appointments.length > 0) {
       appointments = raw.appointments.map((apt     ) => {
@@ -1254,7 +1406,46 @@ class IndexedDBStorage                           {
       }];
     }
 
-    // Determine latest upcoming scheduled appointment for fast top-level access
+    // Normalize Blood Collection appointments
+    let bloodCollections                               = [];
+    if (Array.isArray(raw.bloodCollections) && raw.bloodCollections.length > 0) {
+      bloodCollections = raw.bloodCollections.map((b     ) => {
+        const bInvs = Array.isArray(b.bloodInvestigations) ? b.bloodInvestigations : investigations;
+        const isBOther = bInvs.includes('Other');
+        return {
+          id: b.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`),
+          patientId: b.patientId || patientId,
+          scheduledDate: (b.scheduledDate || '').trim(),
+          scheduledTime: b.scheduledTime || 'Before 8.30 am',
+          status: b.status || 'Scheduled',
+          actualCollectionDate: b.actualCollectionDate,
+          actualCollectionTime: b.actualCollectionTime,
+          bloodInvestigations: bInvs,
+          bloodOther: isBOther && b.bloodOther ? b.bloodOther.trim() : undefined,
+          notes: b.notes ? b.notes.trim() : undefined,
+          rescheduledReason: b.rescheduledReason ? b.rescheduledReason.trim() : undefined,
+          rescheduledToId: b.rescheduledToId,
+          rescheduledFromId: b.rescheduledFromId,
+          createdAt: b.createdAt || raw.createdAt || new Date().toISOString(),
+          updatedAt: b.updatedAt || raw.updatedAt || new Date().toISOString()
+        };
+      });
+    } else if (raw.bloodInvestigationDate && typeof raw.bloodInvestigationDate === 'string' && raw.bloodInvestigationDate.trim()) {
+      bloodCollections = [{
+        id: `bld_migrated_${patientId}`,
+        patientId,
+        scheduledDate: raw.bloodInvestigationDate.trim(),
+        scheduledTime: 'Before 8.30 am',
+        status: 'Scheduled',
+        bloodInvestigations: investigations,
+        bloodOther: isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined,
+        notes: 'Initial scheduled blood collection',
+        createdAt: raw.createdAt || new Date().toISOString(),
+        updatedAt: raw.updatedAt || new Date().toISOString()
+      }];
+    }
+
+    // Determine latest upcoming scheduled TCA appointment for fast top-level access
     const scheduledApts = appointments.filter(a => a.status === 'Scheduled');
     let activeApt                            ;
 
@@ -1269,10 +1460,29 @@ class IndexedDBStorage                           {
       }
     }
 
+    // Determine latest upcoming scheduled Blood Collection appointment
+    const scheduledBld = bloodCollections.filter(b => b.status === 'Scheduled');
+    let activeBld                                        ;
+
+    if (scheduledBld.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const upcoming = scheduledBld.filter(b => b.scheduledDate >= today).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+      if (upcoming.length > 0) {
+        activeBld = upcoming[0];
+      } else {
+        const overdue = [...scheduledBld].sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+        activeBld = overdue[0];
+      }
+    }
+
     const nextTca = activeApt ? activeApt.tcaDate : undefined;
-    const bloodDate = activeApt ? activeApt.bloodInvestigationDate : (raw.bloodInvestigationDate ? raw.bloodInvestigationDate.trim() : undefined);
-    const activeInvs = activeApt ? activeApt.bloodInvestigations : investigations;
-    const activeOther = activeApt ? activeApt.bloodOther : (isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined);
+    const bloodDate = activeBld ? activeBld.scheduledDate : (raw.bloodInvestigationDate ? raw.bloodInvestigationDate.trim() : undefined);
+    const currentBloodStatus                                    = activeBld
+      ? activeBld.status
+      : (bloodCollections.length > 0 ? bloodCollections[bloodCollections.length - 1].status : undefined);
+
+    const activeInvs = activeBld ? activeBld.bloodInvestigations : (activeApt ? activeApt.bloodInvestigations : investigations);
+    const activeOther = activeBld ? activeBld.bloodOther : (activeApt ? activeApt.bloodOther : (isOther && raw.bloodOther ? raw.bloodOther.trim() : undefined));
     const activePlan = activeApt && activeApt.plan ? activeApt.plan : (plan ? plan.trim() : undefined);
 
     return {
@@ -1283,8 +1493,10 @@ class IndexedDBStorage                           {
       patientType: (raw.patientType               ) || 'Existing',
       isActive,
       appointments,
+      bloodCollections,
       nextTca,
       bloodInvestigationDate: bloodDate,
+      currentBloodStatus,
       bloodInvestigations: activeInvs,
       bloodOther: activeOther,
       plan: activePlan,
@@ -1293,6 +1505,7 @@ class IndexedDBStorage                           {
     };
   }
 
+  // --- TCA Appointment Methods ---
   async addAppointment(
     patientId        ,
     aptData                                                                      
@@ -1408,6 +1621,131 @@ class IndexedDBStorage                           {
     });
 
     return { oldApt, newApt };
+  }
+
+  // --- Blood Collection Methods (Requirement 1 & 2) ---
+  async addBloodCollection(
+    patientId        ,
+    data   
+                            
+                             
+                                     
+                          
+                     
+     
+  )                                      {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const now = new Date().toISOString();
+    const bldId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newBld                             = {
+      id: bldId,
+      patientId,
+      scheduledDate: data.scheduledDate.trim(),
+      scheduledTime: data.scheduledTime || 'Before 8.30 am',
+      status: 'Scheduled',
+      bloodInvestigations: Array.isArray(data.bloodInvestigations) ? data.bloodInvestigations : (patient.bloodInvestigations || []),
+      bloodOther: data.bloodOther || patient.bloodOther,
+      notes: data.notes ? data.notes.trim() : undefined,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const bloodCollections = [...(patient.bloodCollections || []), newBld];
+    await this.save({
+      ...patient,
+      bloodCollections
+    });
+
+    return newBld;
+  }
+
+  async updateBloodCollectionStatus(
+    patientId        ,
+    collectionId        ,
+    newStatus                       ,
+    actualDate         ,
+    actualTime         ,
+    notes         
+  )                                      {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const collections = [...(patient.bloodCollections || [])];
+    const index = collections.findIndex(c => c.id === collectionId);
+    if (index === -1) throw new Error(`Blood collection ${collectionId} not found`);
+
+    const now = new Date().toISOString();
+    const updatedCollection                             = {
+      ...collections[index],
+      status: newStatus,
+      actualCollectionDate: newStatus === 'Attended' ? (actualDate || new Date().toISOString().slice(0, 10)) : collections[index].actualCollectionDate,
+      actualCollectionTime: newStatus === 'Attended' ? (actualTime || '08:15 AM') : collections[index].actualCollectionTime,
+      notes: notes !== undefined ? notes : collections[index].notes,
+      updatedAt: now
+    };
+
+    collections[index] = updatedCollection;
+
+    await this.save({
+      ...patient,
+      bloodCollections: collections
+    });
+
+    return updatedCollection;
+  }
+
+  async rescheduleBloodCollection(
+    patientId        ,
+    oldCollectionId        ,
+    newDate        ,
+    reason         ,
+    time         
+  )                                                                                                     {
+    const patient = await this.get(patientId);
+    if (!patient) throw new Error(`Patient ${patientId} not found`);
+
+    const collections = [...(patient.bloodCollections || [])];
+    const oldIndex = collections.findIndex(c => c.id === oldCollectionId);
+    if (oldIndex === -1) throw new Error(`Blood collection ${oldCollectionId} not found`);
+
+    const now = new Date().toISOString();
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `bld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    // Mark old collection as Rescheduled
+    const oldCollection                             = {
+      ...collections[oldIndex],
+      status: 'Rescheduled',
+      rescheduledReason: reason ? reason.trim() : 'Rescheduled to new date',
+      rescheduledToId: newId,
+      updatedAt: now
+    };
+    collections[oldIndex] = oldCollection;
+
+    // Create new collection appointment
+    const nextCollection                             = {
+      id: newId,
+      patientId,
+      scheduledDate: newDate.trim(),
+      scheduledTime: time || oldCollection.scheduledTime || 'Before 8.30 am',
+      status: 'Scheduled',
+      bloodInvestigations: [...oldCollection.bloodInvestigations],
+      bloodOther: oldCollection.bloodOther,
+      notes: reason ? `Rescheduled from ${oldCollection.scheduledDate}: ${reason.trim()}` : `Rescheduled from ${oldCollection.scheduledDate}`,
+      rescheduledFromId: oldCollectionId,
+      createdAt: now,
+      updatedAt: now
+    };
+    collections.push(nextCollection);
+
+    // Save patient profile — preserves all patient data, TCA appointments, investigations!
+    await this.save({
+      ...patient,
+      bloodCollections: collections
+    });
+
+    return { oldCollection, nextCollection };
   }
 
   async setPatientActiveStatus(patientId        , isActive         )                         {
@@ -1784,6 +2122,689 @@ function validateImportJSON(rawText        )                   {
 }
 
 
+  // --- Module: utils/google-drive ---
+             
+                          
+                        
+               
+                  
+
+const GDRIVE_FOLDER_ID = '1KSu4II21PraMavPwi6q2Y3ZUdPnedMVS';
+const GDRIVE_FOLDER_URL = `https://drive.google.com/drive/folders/${GDRIVE_FOLDER_ID}`;
+const GDRIVE_CLIENT_ID_KEY = 'arv_kkbk_gdrive_client_id';
+const GDRIVE_TOKEN_KEY = 'arv_kkbk_gdrive_access_token';
+const GDRIVE_TOKEN_EXP_KEY = 'arv_kkbk_gdrive_token_exp';
+const GDRIVE_LAST_BACKUP_KEY = 'arv_kkbk_gdrive_last_backup_time';
+const GDRIVE_LAST_FILE_KEY = 'arv_kkbk_gdrive_last_backup_file';
+const PRE_RESTORE_SAFETY_KEY = 'arv_kkbk_pre_restore_safety_backup';
+
+class GoogleDriveBackupService {
+          status                          = 'Not Connected';
+          isBackingUp = false;
+          autoBackupTimer      = null;
+          onStatusChangeCallback                                                                                            = null;
+          lastError = '';
+
+  constructor() {
+    this.checkInitialConnection();
+  }
+
+         setStatusListener(callback                                                                                  )       {
+    this.onStatusChangeCallback = callback;
+    this.notifyStatus();
+  }
+
+          notifyStatus()       {
+    if (this.onStatusChangeCallback) {
+      this.onStatusChangeCallback(this.status, this.getLastBackupTime(), this.lastError);
+    }
+  }
+
+         getStatus()                          {
+    return this.status;
+  }
+
+         getClientId()         {
+    try {
+      return localStorage.getItem(GDRIVE_CLIENT_ID_KEY) || '';
+    } catch {
+      return '';
+    }
+  }
+
+         setClientId(clientId        )       {
+    try {
+      localStorage.setItem(GDRIVE_CLIENT_ID_KEY, clientId.trim());
+      this.checkInitialConnection();
+    } catch {}
+  }
+
+         getLastBackupTime()         {
+    try {
+      return localStorage.getItem(GDRIVE_LAST_BACKUP_KEY) || '';
+    } catch {
+      return '';
+    }
+  }
+
+         getLastBackupFile()         {
+    try {
+      return localStorage.getItem(GDRIVE_LAST_FILE_KEY) || '';
+    } catch {
+      return '';
+    }
+  }
+
+          getAccessToken()                {
+    try {
+      const token = sessionStorage.getItem(GDRIVE_TOKEN_KEY);
+      const exp = Number(sessionStorage.getItem(GDRIVE_TOKEN_EXP_KEY) || '0');
+      if (token && exp > Date.now()) {
+        return token;
+      }
+    } catch {}
+    return null;
+  }
+
+          saveAccessToken(token        , expiresInSeconds        )       {
+    try {
+      const exp = Date.now() + (expiresInSeconds - 60) * 1000;
+      sessionStorage.setItem(GDRIVE_TOKEN_KEY, token);
+      sessionStorage.setItem(GDRIVE_TOKEN_EXP_KEY, String(exp));
+      this.status = 'Connected';
+      this.lastError = '';
+      this.notifyStatus();
+    } catch {}
+  }
+
+         disconnect()       {
+    try {
+      sessionStorage.removeItem(GDRIVE_TOKEN_KEY);
+      sessionStorage.removeItem(GDRIVE_TOKEN_EXP_KEY);
+      this.status = 'Not Connected';
+      this.notifyStatus();
+    } catch {}
+  }
+
+          checkInitialConnection()       {
+    const token = this.getAccessToken();
+    if (token) {
+      this.status = 'Connected';
+    } else {
+      this.status = 'Not Connected';
+    }
+    this.notifyStatus();
+  }
+
+  /**
+   * Authorizes Google Drive access via Google Identity Services (GIS) token client.
+   */
+         async authorize(customClientId         )                   {
+    const clientId = customClientId || this.getClientId();
+    if (!clientId) {
+      this.lastError = 'OAuth Client ID not configured. Please enter your Google OAuth 2.0 Web Client ID in Settings.';
+      this.status = 'Not Connected';
+      this.notifyStatus();
+      return false;
+    }
+
+    if (customClientId) {
+      this.setClientId(customClientId);
+    }
+
+    return new Promise((resolve) => {
+      // Check if Google Identity Services script is loaded
+      const win = window       ;
+      if (win.google && win.google.accounts && win.google.accounts.oauth2) {
+        try {
+          const client = win.google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: 'https://www.googleapis.com/auth/drive.file',
+            callback: (response     ) => {
+              if (response.error) {
+                this.lastError = response.error_description || response.error;
+                this.status = 'Not Connected';
+                this.notifyStatus();
+                resolve(false);
+                return;
+              }
+              if (response.access_token) {
+                this.saveAccessToken(response.access_token, Number(response.expires_in) || 3600);
+                resolve(true);
+              } else {
+                resolve(false);
+              }
+            }
+          });
+          client.requestAccessToken({ prompt: 'consent' });
+        } catch (err     ) {
+          this.lastError = err.message || 'Google OAuth initialization failed';
+          this.status = 'Not Connected';
+          this.notifyStatus();
+          resolve(false);
+        }
+      } else {
+        // Fallback: standard OAuth 2.0 token popup
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}&response_type=token&scope=${encodeURIComponent('https://www.googleapis.com/auth/drive.file')}&include_granted_scopes=true&prompt=consent`;
+
+        const width = 500;
+        const height = 600;
+        const left = window.screenX + (window.outerWidth - width) / 2;
+        const top = window.screenY + (window.outerHeight - height) / 2;
+        const popup = window.open(authUrl, 'GoogleAuth', `width=${width},height=${height},left=${left},top=${top}`);
+
+        if (!popup) {
+          this.lastError = 'Popup blocked by browser. Please allow popups for Google sign-in.';
+          this.status = 'Not Connected';
+          this.notifyStatus();
+          resolve(false);
+          return;
+        }
+
+        const pollTimer = window.setInterval(() => {
+          try {
+            if (popup.closed) {
+              window.clearInterval(pollTimer);
+              resolve(this.status === 'Connected');
+              return;
+            }
+            if (popup.location && popup.location.hash) {
+              const hash = popup.location.hash.substring(1);
+              const params = new URLSearchParams(hash);
+              const token = params.get('access_token');
+              const exp = Number(params.get('expires_in')) || 3600;
+              if (token) {
+                this.saveAccessToken(token, exp);
+                popup.close();
+                window.clearInterval(pollTimer);
+                resolve(true);
+              }
+            }
+          } catch {
+            // Cross-origin access expected before redirect
+          }
+        }, 500);
+      }
+    });
+  }
+
+  /**
+   * Generates formatted backup filename: arv-kkbk-backup-YYYY-MM-DD-HH-mm.json
+   */
+         generateBackupFilename()         {
+    const now = new Date();
+    const YYYY = now.getFullYear();
+    const MM = String(now.getMonth() + 1).padStart(2, '0');
+    const DD = String(now.getDate()).padStart(2, '0');
+    const HH = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    return `arv-kkbk-backup-${YYYY}-${MM}-${DD}-${HH}-${mm}.json`;
+  }
+
+  /**
+   * Uploads a complete backup JSON to the designated Google Drive folder.
+   */
+         async uploadBackup(records                 )                   {
+    if (this.isBackingUp) return false;
+
+    const token = this.getAccessToken();
+    if (!token) {
+      this.status = 'Not Connected';
+      this.notifyStatus();
+      return false;
+    }
+
+    if (!navigator.onLine) {
+      this.status = 'Backup Failed';
+      this.lastError = 'Device is currently offline. Will retry when connection returns.';
+      this.notifyStatus();
+      return false;
+    }
+
+    this.isBackingUp = true;
+    this.status = 'Backing Up';
+    this.notifyStatus();
+
+    const filename = this.generateBackupFilename();
+    const backupPayload = {
+      schemaVersion: 5,
+      exportedAt: new Date().toISOString(),
+      clinic: 'Klinik Kesihatan Bandar Kulim',
+      program: 'ARV KKBK',
+      destinationFolderId: GDRIVE_FOLDER_ID,
+      patientCount: records.length,
+      records
+    };
+
+    const boundary = '-------arvkkbkboundary' + Date.now();
+    const delimiter = `\r\n--${boundary}\r\n`;
+    const closeDelimiter = `\r\n--${boundary}--`;
+
+    const metadata = {
+      name: filename,
+      mimeType: 'application/json',
+      parents: [GDRIVE_FOLDER_ID]
+    };
+
+    const multipartRequestBody =
+      delimiter +
+      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+      JSON.stringify(metadata) +
+      delimiter +
+      'Content-Type: application/json\r\n\r\n' +
+      JSON.stringify(backupPayload, null, 2) +
+      closeDelimiter;
+
+    try {
+      const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`
+        },
+        body: multipartRequestBody
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        const errMessage = errorBody.error?.message || `HTTP ${response.status} ${response.statusText}`;
+        if (response.status === 401) {
+          this.disconnect();
+          this.lastError = 'Google Drive session expired. Please reconnect.';
+        } else {
+          this.lastError = `Google Drive upload error: ${errMessage}`;
+        }
+        this.status = 'Backup Failed';
+        this.notifyStatus();
+        return false;
+      }
+
+      const result = await response.json();
+      if (result && result.id) {
+        const nowIso = new Date().toISOString();
+        try {
+          localStorage.setItem(GDRIVE_LAST_BACKUP_KEY, nowIso);
+          localStorage.setItem(GDRIVE_LAST_FILE_KEY, filename);
+        } catch {}
+
+        this.status = 'Backup Successful';
+        this.lastError = '';
+        this.notifyStatus();
+        return true;
+      }
+
+      this.status = 'Backup Failed';
+      this.lastError = 'Incomplete response from Google Drive.';
+      this.notifyStatus();
+      return false;
+    } catch (err     ) {
+      this.status = 'Backup Failed';
+      this.lastError = err.message || 'Network error during Google Drive upload';
+      this.notifyStatus();
+      return false;
+    } finally {
+      this.isBackingUp = false;
+    }
+  }
+
+  /**
+   * Schedules an automatic debounced backup (3 seconds after data changes).
+   */
+         scheduleAutoBackup(getRecords                                )       {
+    if (this.status !== 'Connected' && this.status !== 'Backup Successful') return;
+
+    if (this.autoBackupTimer) {
+      clearTimeout(this.autoBackupTimer);
+    }
+
+    this.autoBackupTimer = setTimeout(async () => {
+      try {
+        const records = await getRecords();
+        await this.uploadBackup(records);
+      } catch (err) {
+        console.warn('Auto-backup execution warning:', err);
+      }
+    }, 3000);
+  }
+
+  /**
+   * Lists available backup JSON files in the designated Google Drive folder.
+   */
+         async listBackups()                                   {
+    const token = this.getAccessToken();
+    if (!token) return [];
+
+    try {
+      const q = encodeURIComponent(`'${GDRIVE_FOLDER_ID}' in parents and trashed=false and name contains 'arv-kkbk-backup'`);
+      const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,createdTime,size)&orderBy=createdTime+desc&pageSize=20`;
+
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to list files: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return Array.isArray(data.files) ? data.files : [];
+    } catch (err     ) {
+      console.error('List backups failed:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Downloads a backup file from Google Drive.
+   */
+         async downloadBackup(fileId        )               {
+    const token = this.getAccessToken();
+    if (!token) throw new Error('Not connected to Google Drive');
+
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download backup: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Creates an emergency pre-restore safety snapshot of current local records.
+   */
+         savePreRestoreSafetySnapshot(records                 )       {
+    try {
+      const snapshot = {
+        snapshotTime: new Date().toISOString(),
+        recordsCount: records.length,
+        records
+      };
+      localStorage.setItem(PRE_RESTORE_SAFETY_KEY, JSON.stringify(snapshot));
+    } catch (err) {
+      console.warn('Failed to save pre-restore safety snapshot to localStorage:', err);
+    }
+  }
+}
+
+const googleDriveService = new GoogleDriveBackupService();
+
+
+  // --- Module: components/blood-collection-modal ---
+             
+                
+                             
+                       
+                  
+class BloodCollectionModal {
+          overlayEl             ;
+          currentPatient                       = null;
+          currentCollection                                    = null;
+          currentAction                   = 'attend';
+          onSaveCallback                                                            = null;
+          previousActiveElement                     = null;
+
+  constructor() {
+    this.overlayEl = document.createElement('div');
+    this.overlayEl.className = 'modal-overlay';
+    this.overlayEl.setAttribute('role', 'dialog');
+    this.overlayEl.setAttribute('aria-modal', 'true');
+    this.overlayEl.setAttribute('aria-label', 'Blood Collection Tracking');
+
+    this.overlayEl.innerHTML = `
+      <div class="bottom-sheet" style="max-width: 480px;">
+        <div class="sheet-grab-bar"></div>
+        <div class="sheet-header">
+          <span class="sheet-title" id="blood-modal-title">Blood Collection Action</span>
+          <button type="button" class="btn-icon" data-action="close" aria-label="Cancel and close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <form id="blood-modal-form" class="sheet-body" novalidate>
+          <div id="blood-patient-summary" class="patient-banner-info" style="padding: 10px 14px; background: var(--color-bg-primary); border-radius: var(--radius-md); font-size: 13.5px; margin-bottom: 10px;">
+            Patient: <strong id="bld-patient-name" style="color: var(--color-text-primary);"></strong>
+            <span id="bld-patient-meta" style="color: var(--color-text-secondary); margin-left: 6px;"></span>
+          </div>
+
+          <div id="bld-action-body"></div>
+        </form>
+
+        <div class="sheet-footer">
+          <button type="button" class="btn-secondary" data-action="close">Cancel</button>
+          <button type="submit" form="blood-modal-form" id="btn-save-blood-action" class="btn-primary">Confirm</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(this.overlayEl);
+    this.bindEvents();
+  }
+
+          bindEvents()       {
+    this.overlayEl.addEventListener('click', (e) => {
+      const target = e.target               ;
+      if (target === this.overlayEl || target.closest('[data-action="close"]')) {
+        this.close();
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.isOpen()) {
+        this.close();
+      }
+    });
+
+    const form = this.overlayEl.querySelector('#blood-modal-form')                   ;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await this.handleSubmit();
+    });
+  }
+
+         open(
+    patient               ,
+    collection                            ,
+    action                  ,
+    onSave                                                  ,
+    triggerEl              
+  )       {
+    this.currentPatient = patient;
+    this.currentCollection = collection;
+    this.currentAction = action;
+    this.onSaveCallback = onSave;
+    this.previousActiveElement = triggerEl || (document.activeElement               );
+
+    const titleEl = this.overlayEl.querySelector('#blood-modal-title')               ;
+    const nameEl = this.overlayEl.querySelector('#bld-patient-name')               ;
+    const metaEl = this.overlayEl.querySelector('#bld-patient-meta')               ;
+    const saveBtn = this.overlayEl.querySelector('#btn-save-blood-action')                     ;
+    const bodyEl = this.overlayEl.querySelector('#bld-action-body')               ;
+
+    nameEl.textContent = patient.name;
+    metaEl.textContent = `(IC: ${patient.icNumber})`;
+
+    const scheduledDisplay = formatDisplayDate(collection.scheduledDate);
+    const today = getLocalTodayISO();
+
+    if (action === 'attend') {
+      titleEl.textContent = 'Record Sample Collection';
+      saveBtn.textContent = 'Mark Attended';
+      saveBtn.className = 'btn-primary';
+      bodyEl.innerHTML = `
+        <div style="background-color: var(--color-accent-subtle); border-radius: var(--radius-md); padding: 10px 12px; font-size: 13px; color: var(--color-text-primary); margin-bottom: 12px;">
+          Scheduled Date: <strong>${scheduledDisplay}</strong>
+          <div style="margin-top: 4px; font-size: 12px; color: var(--color-text-secondary);">
+            Sample collected at KK Bandar Kulim. CD4 samples are routed to KK Taman Intan; Viral Load samples to Hospital Sultanah Bahiyah (HSB).
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label required" for="bld-field-actual-date">Actual Collection Date</label>
+            <input type="date" id="bld-field-actual-date" class="form-input" value="${today}" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bld-field-actual-time">Collection Time</label>
+            <input type="text" id="bld-field-actual-time" class="form-input" value="08:15 AM" placeholder="e.g. 08:15 AM" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="bld-field-notes">Clinical Notes (Optional)</label>
+          <input type="text" id="bld-field-notes" class="form-input" placeholder="e.g. Blood drawn without complications, 2 tubes sent" />
+        </div>
+      `;
+    } else if (action === 'reschedule') {
+      titleEl.textContent = 'Reschedule Blood Collection';
+      saveBtn.textContent = 'Reschedule Collection';
+      saveBtn.className = 'btn-primary';
+      bodyEl.innerHTML = `
+        <div style="background-color: var(--color-accent-subtle); border-radius: var(--radius-md); padding: 10px 12px; font-size: 13px; color: var(--color-text-primary); margin-bottom: 12px;">
+          Original Scheduled Date: <strong>${scheduledDisplay}</strong>
+          <div style="margin-top: 4px; font-size: 12px; color: var(--color-text-secondary);">
+            Rescheduling preserves the original date in Blood History and creates a new scheduled appointment. Patient profile remains completely intact.
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label required" for="bld-field-new-date">New Scheduled Date</label>
+            <input type="date" id="bld-field-new-date" class="form-input" required />
+            <span class="form-error" id="err-bld-new-date" style="display: none;">Please select a new date</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bld-field-new-time">Time</label>
+            <input type="text" id="bld-field-new-time" class="form-input" value="Before 8.30 am" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="bld-field-reason">Reason for Rescheduling</label>
+          <input type="text" id="bld-field-reason" class="form-input" placeholder="e.g. Patient requested postponement / Public holiday" />
+        </div>
+      `;
+    } else if (action === 'dna') {
+      titleEl.textContent = 'Record Did Not Attend (DNA)';
+      saveBtn.textContent = 'Mark DNA';
+      saveBtn.className = 'btn-destructive';
+      bodyEl.innerHTML = `
+        <div style="background-color: var(--color-destructive-bg); border-radius: var(--radius-md); padding: 10px 12px; font-size: 13px; color: var(--color-destructive); margin-bottom: 12px;">
+          Scheduled Date: <strong>${scheduledDisplay}</strong>
+          <div style="margin-top: 4px; font-size: 12px;">
+            Patient did not attend scheduled blood collection. This DNA record will be permanently preserved in Blood Collection History.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="bld-field-notes">Follow-up Notes / Reason</label>
+          <input type="text" id="bld-field-notes" class="form-input" placeholder="e.g. Unreachable by phone, will contact next week" />
+        </div>
+      `;
+    } else if (action === 'cancel') {
+      titleEl.textContent = 'Cancel Blood Collection';
+      saveBtn.textContent = 'Cancel Appointment';
+      saveBtn.className = 'btn-secondary';
+      bodyEl.innerHTML = `
+        <div style="padding: 10px 12px; background: var(--color-bg-primary); border-radius: var(--radius-md); font-size: 13px; margin-bottom: 12px;">
+          Scheduled Date: <strong>${scheduledDisplay}</strong>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bld-field-notes">Cancellation Reason</label>
+          <input type="text" id="bld-field-notes" class="form-input" placeholder="e.g. Tests already done at hospital" />
+        </div>
+      `;
+    }
+
+    document.body.classList.add('modal-open');
+    this.overlayEl.classList.add('is-open');
+
+    window.setTimeout(() => {
+      const firstInput = this.overlayEl.querySelector('input')                    ;
+      if (firstInput) firstInput.focus();
+    }, 100);
+  }
+
+          async handleSubmit()                {
+    if (!this.currentCollection || !this.onSaveCallback) return;
+
+    let newDate = '';
+    let newTime = '';
+    let reason = '';
+    let actualDate = '';
+    let actualTime = '';
+    let notes = '';
+
+    if (this.currentAction === 'reschedule') {
+      const dateInp = this.overlayEl.querySelector('#bld-field-new-date')                    ;
+      const timeInp = this.overlayEl.querySelector('#bld-field-new-time')                    ;
+      const reasonInp = this.overlayEl.querySelector('#bld-field-reason')                    ;
+      const err = this.overlayEl.querySelector('#err-bld-new-date')               ;
+
+      if (!dateInp.value) {
+        err.style.display = 'block';
+        dateInp.focus();
+        return;
+      }
+      err.style.display = 'none';
+      newDate = dateInp.value;
+      newTime = timeInp.value;
+      reason = reasonInp.value;
+    } else if (this.currentAction === 'attend') {
+      const actDateInp = this.overlayEl.querySelector('#bld-field-actual-date')                    ;
+      const actTimeInp = this.overlayEl.querySelector('#bld-field-actual-time')                    ;
+      const notesInp = this.overlayEl.querySelector('#bld-field-notes')                    ;
+
+      actualDate = actDateInp ? actDateInp.value : '';
+      actualTime = actTimeInp ? actTimeInp.value : '';
+      notes = notesInp ? notesInp.value : '';
+    } else {
+      const notesInp = this.overlayEl.querySelector('#bld-field-notes')                    ;
+      notes = notesInp ? notesInp.value : '';
+    }
+
+    const saveBtn = this.overlayEl.querySelector('#btn-save-blood-action')                     ;
+    saveBtn.disabled = true;
+
+    try {
+      await this.onSaveCallback({
+        action: this.currentAction,
+        collectionId: this.currentCollection.id,
+        newDate: newDate || undefined,
+        newTime: newTime || undefined,
+        reason: reason || undefined,
+        actualDate: actualDate || undefined,
+        actualTime: actualTime || undefined,
+        notes: notes || undefined
+      });
+      this.close();
+    } finally {
+      saveBtn.disabled = false;
+    }
+  }
+
+         close()       {
+    if (!this.isOpen()) return;
+    document.body.classList.remove('modal-open');
+    this.overlayEl.classList.remove('is-open');
+
+    if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
+      this.previousActiveElement.focus();
+    }
+  }
+
+         isOpen()          {
+    return this.overlayEl.classList.contains('is-open');
+  }
+}
+
+
   // --- Module: components/record-card ---
                                                            
 function escapeHTML(str        )         {
@@ -1855,7 +2876,7 @@ function createRecordCard(
        </div>`
     : '';
 
-  // Blood date label & subtle overdue indicator
+  // Blood date label & subtle overdue/attendance indicator
   let bloodHtml = '';
   if (record.bloodInvestigationDate) {
     const formattedBlood = formatDisplayDate(record.bloodInvestigationDate);
@@ -1863,7 +2884,15 @@ function createRecordCard(
     const hasWork = (record.bloodInvestigations && record.bloodInvestigations.length > 0) || Boolean(record.plan && record.plan.trim());
 
     let statusNote = '';
-    if (isPast && hasWork) {
+    if (record.currentBloodStatus === 'Attended') {
+      statusNote = `<span class="blood-status-note attended" style="color: #248A3D; font-weight: 600;">(Sample Collected)</span>`;
+    } else if (record.currentBloodStatus === 'DNA') {
+      statusNote = `<span class="blood-status-note dna" style="color: #C97200; font-weight: 600;">(DNA)</span>`;
+    } else if (record.currentBloodStatus === 'Rescheduled') {
+      statusNote = `<span class="blood-status-note rescheduled" style="color: #5856D6; font-weight: 600;">(Rescheduled)</span>`;
+    } else if (record.currentBloodStatus === 'Cancelled') {
+      statusNote = `<span class="blood-status-note cancelled" style="color: var(--color-text-tertiary); font-weight: 600;">(Cancelled)</span>`;
+    } else if (isPast && hasWork) {
       statusNote = `<span class="blood-status-note overdue">(Overdue)</span>`;
     }
 
@@ -3351,9 +4380,17 @@ class AppointmentModal {
 
 
   // --- Module: components/details-modal ---
-                                                                                              
+             
+                
+                 
+              
+                    
+                             
+                       
+                  
+                                                                 
 function escapeHTML(str        )         {
-  return str
+  return (str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -3369,6 +4406,9 @@ function escapeHTML(str        )         {
                                                  
                                                                                 
                                                                                                           
+                              
+                                                                                                                    
+                                                              
  
 
 class DetailsModal {
@@ -3385,7 +4425,7 @@ class DetailsModal {
     this.overlayEl.setAttribute('aria-label', 'Patient Profile');
 
     this.overlayEl.innerHTML = `
-      <div class="bottom-sheet profile-modal" style="max-width: 620px;">
+      <div class="bottom-sheet profile-modal" style="max-width: 660px;">
         <div class="sheet-grab-bar"></div>
         <div class="sheet-header">
           <span class="sheet-title">Patient Profile</span>
@@ -3522,12 +4562,13 @@ class DetailsModal {
          </a>`
       : '<span style="color: var(--color-text-tertiary); font-style: italic;">None</span>';
 
-    // Appointments parsing: Upcoming (Scheduled) vs History (Attended, DNA, Rescheduled, Cancelled)
+    // -------------------------------------------------------------
+    // TCA Appointments: Upcoming (Scheduled) vs History
+    // -------------------------------------------------------------
     const appointments                   = Array.isArray(record.appointments) ? record.appointments : [];
     const scheduledApts = appointments.filter(a => a.status === 'Scheduled');
     const historicalApts = appointments.filter(a => a.status !== 'Scheduled').sort((a, b) => b.tcaDate.localeCompare(a.tcaDate));
 
-    // Sort scheduled appointments (earliest first)
     scheduledApts.sort((a, b) => a.tcaDate.localeCompare(b.tcaDate));
     const nextApt = scheduledApts.length > 0 ? scheduledApts[0] : null;
 
@@ -3538,7 +4579,6 @@ class DetailsModal {
       const isOverdue = tcaStatus.type === 'overdue';
       const formattedDate = formatDisplayDate(nextApt.tcaDate);
 
-      // Overdue alert banner if required
       let overdueBanner = '';
       if (isOverdue) {
         overdueBanner = `
@@ -3548,12 +4588,11 @@ class DetailsModal {
               <line x1="12" y1="9" x2="12" y2="13"></line>
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
-            <span><strong>Overdue Appointment: Action Required.</strong> Record patient attendance, mark DNA, or reschedule.</span>
+            <span><strong>Overdue TCA Appointment: Action Required.</strong> Record patient attendance, mark DNA, or reschedule.</span>
           </div>
         `;
       }
 
-      // Blood date
       let bloodFormatted = 'None';
       let bloodBadgeHtml = '';
       if (nextApt.bloodInvestigationDate) {
@@ -3563,7 +4602,6 @@ class DetailsModal {
         }
       }
 
-      // Blood investigations
       let invsHtml = '<span style="color: var(--color-text-tertiary); font-style: italic;">None selected</span>';
       if (nextApt.bloodInvestigations && nextApt.bloodInvestigations.length > 0) {
         const chips = nextApt.bloodInvestigations.map(inv => {
@@ -3573,7 +4611,6 @@ class DetailsModal {
         invsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
       }
 
-      // Plan & notes
       const planHtml = nextApt.plan && nextApt.plan.trim()
         ? `<div class="detail-plan-box">${escapeHTML(nextApt.plan)}</div>`
         : '<span style="color: var(--color-text-tertiary); font-style: italic;">No specific plan recorded</span>';
@@ -3646,7 +4683,7 @@ class DetailsModal {
 
           <div style="margin-top: 12px; text-align: right;">
             <button type="button" id="btn-create-extra-tca" class="btn-secondary" style="font-size: 13px; padding: 6px 12px;">
-              + Schedule Another Appointment
+              + Schedule Another TCA Appointment
             </button>
           </div>
         </div>
@@ -3657,7 +4694,7 @@ class DetailsModal {
           <div class="profile-section-title">A. Upcoming Scheduled TCA</div>
           <div style="padding: 16px; text-align: center; color: var(--color-text-secondary); background-color: var(--color-bg-secondary); border-radius: var(--radius-md);">
             <p style="font-size: 14.5px; font-weight: 500; margin-bottom: 6px;">No Upcoming TCA Scheduled</p>
-            <p style="font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 12px;">Patient does not have an active scheduled appointment.</p>
+            <p style="font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 12px;">Patient does not have an active scheduled clinic TCA appointment.</p>
             <button type="button" id="btn-schedule-new-tca" class="btn-primary" style="font-size: 14px; padding: 8px 18px;">
               + Schedule TCA Appointment
             </button>
@@ -3724,7 +4761,7 @@ class DetailsModal {
     } else {
       historyItemsHtml = `
         <div style="padding: 14px; text-align: center; color: var(--color-text-tertiary); font-style: italic; font-size: 13.5px;">
-          No previous appointment history recorded for this patient.
+          No previous TCA appointment history recorded for this patient.
         </div>
       `;
     }
@@ -3740,6 +4777,238 @@ class DetailsModal {
       </div>
     `;
 
+    // -------------------------------------------------------------
+    // Blood Collection Appointments: Upcoming vs History
+    // -------------------------------------------------------------
+    const bloodCollections                               = Array.isArray(record.bloodCollections) && record.bloodCollections.length > 0
+      ? [...record.bloodCollections]
+      : (record.bloodInvestigationDate
+          ? [{
+              id: 'bld-synth-' + record.id,
+              patientId: record.id,
+              scheduledDate: record.bloodInvestigationDate,
+              status: record.currentBloodStatus || 'Scheduled',
+              investigations: record.bloodInvestigations || [],
+              investigationOther: record.bloodOther,
+              notes: record.notes,
+              createdAt: record.createdAt,
+              updatedAt: record.updatedAt
+            }]
+          : []);
+
+    const scheduledBld = bloodCollections.filter(b => b.status === 'Scheduled').sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+    const nextBld = scheduledBld.length > 0 ? scheduledBld[0] : null;
+    const historicalBld = bloodCollections.filter(b => b.status !== 'Scheduled').sort((a, b) => {
+      const dateA = a.actualCollectionDate || a.scheduledDate;
+      const dateB = b.actualCollectionDate || b.scheduledDate;
+      return dateB.localeCompare(dateA);
+    });
+
+    // Facility Routing Notice
+    const labRoutingNoticeHtml = `
+      <div class="lab-routing-notice" style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; padding: 10px 12px; background: var(--color-bg-primary); border: 0.5px solid var(--color-separator); border-left: 3px solid var(--color-accent); border-radius: var(--radius-md); margin-bottom: 12px; line-height: 1.45;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px; color: var(--color-accent);">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <div>
+          <strong>Collection & Laboratory Routing:</strong> All blood samples are collected on-site at <strong>KK Bandar Kulim</strong>. CD4 samples are dispatched to <strong>KK Taman Intan</strong>; HIV Viral Load samples are dispatched to <strong>Hospital Sultanah Bahiyah (HSB)</strong>. Receiving facilities are not patient collection locations.
+        </div>
+      </div>
+    `;
+
+    // SECTION C: Upcoming Blood Collection HTML
+    let upcomingBloodSectionHtml = '';
+    if (nextBld) {
+      const isOverdue = isDatePast(nextBld.scheduledDate);
+      const formattedDate = formatDisplayDate(nextBld.scheduledDate);
+      const timeDisplay = nextBld.scheduledTime ? `at ${escapeHTML(nextBld.scheduledTime)}` : '';
+
+      let overdueBanner = '';
+      if (isOverdue) {
+        overdueBanner = `
+          <div class="overdue-action-required-banner">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span><strong>Blood Collection Overdue: Action Required.</strong> Record sample collection, mark DNA, or reschedule.</span>
+          </div>
+        `;
+      }
+
+      let invsHtml = '<span style="color: var(--color-text-tertiary); font-style: italic;">None specified</span>';
+      if (nextBld.investigations && nextBld.investigations.length > 0) {
+        const chips = nextBld.investigations.map(inv => {
+          const text = inv === 'Other' && nextBld.investigationOther ? `Other: ${nextBld.investigationOther}` : inv;
+          return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHTML(text)}</span>`;
+        }).join('');
+        invsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
+      }
+
+      const notesHtml = nextBld.notes && nextBld.notes.trim()
+        ? `<div style="font-size: 13px; color: var(--color-text-secondary); margin-top: 4px;"><em>Note: ${escapeHTML(nextBld.notes)}</em></div>`
+        : '';
+
+      upcomingBloodSectionHtml = `
+        <div class="profile-section-card ${isOverdue ? 'has-overdue' : ''}">
+          <div class="profile-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+            <span>C. Upcoming Blood Collection</span>
+            <span class="appointment-status-badge badge-scheduled">Scheduled</span>
+          </div>
+          ${overdueBanner}
+          ${labRoutingNoticeHtml}
+
+          <div class="profile-row-item">
+            <span class="profile-row-label">Scheduled Date</span>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="profile-row-value" style="font-size: 16px; font-weight: 700;">${formattedDate} ${timeDisplay}</span>
+              ${isOverdue ? `<span class="blood-status-note overdue">(Overdue)</span>` : ''}
+            </div>
+          </div>
+          <div class="profile-row-item" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+            <span class="profile-row-label">Investigations to Perform:</span>
+            ${invsHtml}
+          </div>
+          ${notesHtml ? `<div class="profile-row-item" style="flex-direction: column; align-items: flex-start; gap: 6px;"><span class="profile-row-label">Staff Notes:</span>${notesHtml}</div>` : ''}
+
+          <!-- Blood Collection Actions -->
+          <div class="upcoming-tca-actions" style="margin-top: 14px;">
+            <button type="button" class="btn-action-attended" data-blood-action="attend" data-bld-id="${nextBld.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Mark Attended (Sample Collected)
+            </button>
+            <button type="button" class="btn-action-dna" data-blood-action="dna" data-bld-id="${nextBld.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+              Mark DNA
+            </button>
+            <button type="button" class="btn-action-reschedule" data-blood-action="reschedule" data-bld-id="${nextBld.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+              Reschedule Blood Date
+            </button>
+            <button type="button" class="btn-action-cancel" data-blood-action="cancel" data-bld-id="${nextBld.id}">
+              Cancel
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      upcomingBloodSectionHtml = `
+        <div class="profile-section-card">
+          <div class="profile-section-title">C. Upcoming Blood Collection</div>
+          ${labRoutingNoticeHtml}
+          <div style="padding: 16px; text-align: center; color: var(--color-text-secondary); background-color: var(--color-bg-secondary); border-radius: var(--radius-md);">
+            <p style="font-size: 14.5px; font-weight: 500; margin-bottom: 6px;">No Upcoming Blood Collection Scheduled</p>
+            <p style="font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 12px;">Patient does not have an active scheduled blood collection appointment.</p>
+            <button type="button" id="btn-schedule-new-blood" class="btn-primary" style="font-size: 14px; padding: 8px 18px;">
+              + Schedule Blood Collection
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // SECTION D: Blood Collection History HTML
+    let bloodHistoryItemsHtml = '';
+    if (historicalBld.length > 0) {
+      bloodHistoryItemsHtml = historicalBld.map(bld => {
+        const scheduledFormatted = formatDisplayDate(bld.scheduledDate);
+        let statusClass = 'badge-cancelled';
+        let statusLabel         = bld.status;
+
+        if (bld.status === 'Attended') {
+          statusClass = 'badge-attended';
+          statusLabel = 'Attended (Sample Collected)';
+        } else if (bld.status === 'DNA') {
+          statusClass = 'badge-dna';
+          statusLabel = 'Did Not Attend (DNA)';
+        } else if (bld.status === 'Rescheduled') {
+          statusClass = 'badge-rescheduled';
+          statusLabel = 'Rescheduled';
+        } else if (bld.status === 'Cancelled') {
+          statusClass = 'badge-cancelled';
+          statusLabel = 'Cancelled';
+        }
+
+        let actualCollectionInfo = '';
+        if (bld.status === 'Attended' && bld.actualCollectionDate) {
+          const actDate = formatDisplayDate(bld.actualCollectionDate);
+          const actTime = bld.actualCollectionTime ? `at ${escapeHTML(bld.actualCollectionTime)}` : '';
+          actualCollectionInfo = `
+            <div style="font-size: 13px; color: #248A3D; font-weight: 500; margin-top: 4px;">
+              Actual Collection: ${actDate} ${actTime} (Sample Collected at KK Bandar Kulim)
+            </div>
+          `;
+        }
+
+        let reschedNotice = '';
+        if (bld.status === 'Rescheduled') {
+          const reasonText = bld.rescheduledReason ? ` - Reason: ${escapeHTML(bld.rescheduledReason)}` : '';
+          reschedNotice = `<div style="font-size: 12px; color: #5856D6; font-weight: 500; margin-top: 4px;">Rescheduled to new appointment${reasonText}</div>`;
+        }
+
+        let invsChips = '';
+        if (bld.investigations && bld.investigations.length > 0) {
+          const chips = bld.investigations.map(inv => {
+            const text = inv === 'Other' && bld.investigationOther ? `Other: ${bld.investigationOther}` : inv;
+            return `<span class="mini-chip" style="font-size: 11.5px; padding: 2px 7px;">${escapeHTML(text)}</span>`;
+          }).join('');
+          invsChips = `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">${chips}</div>`;
+        }
+
+        let notesText = '';
+        if (bld.notes && bld.notes.trim()) {
+          notesText = `<div style="font-size: 12.5px; color: var(--color-text-tertiary); margin-top: 4px;"><em>Notes: ${escapeHTML(bld.notes)}</em></div>`;
+        }
+
+        return `
+          <div class="tca-history-item">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="tca-history-date">Scheduled: ${scheduledFormatted}</span>
+              </div>
+              <span class="appointment-status-badge ${statusClass}">${escapeHTML(statusLabel)}</span>
+            </div>
+            ${actualCollectionInfo}
+            ${reschedNotice}
+            ${invsChips}
+            ${notesText}
+          </div>
+        `;
+      }).join('');
+    } else {
+      bloodHistoryItemsHtml = `
+        <div style="padding: 14px; text-align: center; color: var(--color-text-tertiary); font-style: italic; font-size: 13.5px;">
+          No previous blood collection history recorded for this patient.
+        </div>
+      `;
+    }
+
+    const bloodHistorySectionHtml = `
+      <div class="profile-section-card">
+        <div class="profile-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+          <span>D. Blood Collection History (${historicalBld.length} past records)</span>
+        </div>
+        <div class="tca-history-list">
+          ${bloodHistoryItemsHtml}
+        </div>
+      </div>
+    `;
+
+    // -------------------------------------------------------------
+    // Full Profile Assembly
+    // -------------------------------------------------------------
     contentEl.innerHTML = `
       <div class="profile-group-wrapper">
         ${activeBannerHtml}
@@ -3781,6 +5050,12 @@ class DetailsModal {
 
         <!-- Section B: TCA History -->
         ${historySectionHtml}
+
+        <!-- Section C: Upcoming Blood Collection -->
+        ${upcomingBloodSectionHtml}
+
+        <!-- Section D: Blood Collection History -->
+        ${bloodHistorySectionHtml}
       </div>
     `;
 
@@ -3804,7 +5079,17 @@ class DetailsModal {
       }
     });
 
-    // Upcoming action buttons
+    contentEl.querySelector('#btn-schedule-new-blood')?.addEventListener('click', () => {
+      if (this.currentRecord && this.handlers) {
+        if (this.handlers.onScheduleBloodCollection) {
+          this.handlers.onScheduleBloodCollection(this.currentRecord);
+        } else {
+          this.handlers.onScheduleTca(this.currentRecord);
+        }
+      }
+    });
+
+    // Upcoming TCA action buttons
     contentEl.querySelectorAll('[data-action]').forEach(btn => {
       const action = btn.getAttribute('data-action');
       const aptId = btn.getAttribute('data-apt-id');
@@ -3823,6 +5108,949 @@ class DetailsModal {
         }
       });
     });
+
+    // Upcoming Blood Collection action buttons
+    contentEl.querySelectorAll('[data-blood-action]').forEach(btn => {
+      const bldAction = btn.getAttribute('data-blood-action')                    ;
+      const bldId = btn.getAttribute('data-bld-id');
+      if (!bldAction || !bldId || !nextBld) return;
+
+      btn.addEventListener('click', () => {
+        if (!this.currentRecord || !this.handlers) return;
+        if (this.handlers.onBloodAction) {
+          this.handlers.onBloodAction(this.currentRecord, nextBld, bldAction);
+        }
+      });
+    });
+  }
+
+         close()       {
+    if (!this.isOpen()) return;
+    document.body.classList.remove('modal-open');
+    this.overlayEl.classList.remove('is-open');
+
+    if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
+      this.previousActiveElement.focus();
+    }
+  }
+
+         isOpen()          {
+    return this.overlayEl.classList.contains('is-open');
+  }
+}
+
+
+  // --- Module: components/message-generator ---
+             
+                      
+              
+                        
+                  
+class MessageGenerator {
+          containerEl             ;
+          currentInputs                         = {
+    templateType: 'blood_collection',
+    tone: 'polite',
+    time: 'Sebelum 8.30 pagi',
+    reason: 'keperluan klinikal',
+    signature: 'MA Ariff\nKlinik Kesihatan Bandar Kulim'
+  };
+
+  constructor() {
+    this.containerEl = document.createElement('div');
+    this.containerEl.className = 'message-generator-view';
+    this.render();
+  }
+
+         getElement()              {
+    return this.containerEl;
+  }
+
+          render()       {
+    this.containerEl.innerHTML = `
+      <div class="msg-gen-header">
+        <h3 class="msg-gen-title">Message Generator</h3>
+        <p class="msg-gen-desc">Create ready-to-send patient messages for WhatsApp and SMS.</p>
+      </div>
+
+      <!-- Template Selection Pills -->
+      <div class="msg-template-chips" role="radiogroup" aria-label="Select Message Template">
+        <button type="button" class="template-chip is-active" data-tpl="blood_collection">Blood Collection</button>
+        <button type="button" class="template-chip" data-tpl="tca_reschedule">TCA Rescheduling</button>
+        <button type="button" class="template-chip" data-tpl="tca_reminder">TCA Reminder</button>
+        <button type="button" class="template-chip" data-tpl="missed_appointment">Missed Appointment</button>
+        <button type="button" class="template-chip" data-tpl="general_followup">General Follow-up</button>
+        <button type="button" class="template-chip" data-tpl="custom">Custom Message</button>
+      </div>
+
+      <!-- Tone Selection -->
+      <div class="msg-tone-section">
+        <label class="form-label" style="margin-bottom: 6px;">Message Tone</label>
+        <div class="segmented-control" id="msg-tone-control" role="radiogroup">
+          <button type="button" class="segment-btn is-active" data-tone="polite">Polite</button>
+          <button type="button" class="segment-btn" data-tone="friendly">Friendly</button>
+          <button type="button" class="segment-btn" data-tone="formal">Formal</button>
+        </div>
+      </div>
+
+      <!-- Dynamic Form Fields -->
+      <div class="msg-inputs-form" id="msg-inputs-form"></div>
+
+      <!-- Message Preview & Edit Area -->
+      <div class="msg-preview-card">
+        <div class="msg-preview-head">
+          <span class="preview-badge">Live Message Preview</span>
+          <span style="font-size: 11.5px; color: var(--color-text-tertiary);">Directly editable below</span>
+        </div>
+        <textarea id="msg-preview-text" class="msg-preview-textarea" rows="10" aria-label="Generated Message Preview"></textarea>
+
+        <div class="msg-preview-actions">
+          <button type="button" id="btn-msg-copy" class="btn-primary btn-msg-action">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>Copy Message</span>
+          </button>
+
+          <button type="button" id="btn-msg-whatsapp" class="btn-whatsapp btn-msg-action">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+            </svg>
+            <span>Open WhatsApp</span>
+          </button>
+
+          <button type="button" id="btn-msg-reset" class="btn-secondary btn-msg-action" style="font-weight: 500;">
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- Privacy Notice -->
+      <div class="msg-privacy-notice">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <span>
+          <strong>Patient Privacy Safeguard:</strong> Messages are generated 100% locally on this device without external AI. Never include HIV status, diagnosis, or sensitive medication regimens in patient messages.
+        </span>
+      </div>
+    `;
+
+    this.bindEvents();
+    this.renderInputs();
+    this.updatePreview();
+  }
+
+          bindEvents()       {
+    // Template selection
+    this.containerEl.querySelectorAll('.template-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        this.containerEl.querySelectorAll('.template-chip').forEach(c => c.classList.remove('is-active'));
+        chip.classList.add('is-active');
+        const tpl = chip.getAttribute('data-tpl')                       ;
+        this.currentInputs.templateType = tpl;
+        this.renderInputs();
+        this.updatePreview();
+      });
+    });
+
+    // Tone selection
+    const toneCtrl = this.containerEl.querySelector('#msg-tone-control');
+    if (toneCtrl) {
+      toneCtrl.addEventListener('click', (e) => {
+        const btn = (e.target               ).closest('.segment-btn')                     ;
+        if (!btn) return;
+        toneCtrl.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        const tone = btn.getAttribute('data-tone')               ;
+        this.currentInputs.tone = tone;
+        this.updatePreview();
+      });
+    }
+
+    // Copy message button
+    const copyBtn = this.containerEl.querySelector('#btn-msg-copy');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', async () => {
+        const textarea = this.containerEl.querySelector('#msg-preview-text')                       ;
+        if (textarea && textarea.value) {
+          try {
+            await navigator.clipboard.writeText(textarea.value);
+            toast.show('Message copied to clipboard');
+          } catch {
+            textarea.select();
+            document.execCommand('copy');
+            toast.show('Message copied to clipboard');
+          }
+        }
+      });
+    }
+
+    // Open WhatsApp button (pre-fills message, does NOT auto-send)
+    const waBtn = this.containerEl.querySelector('#btn-msg-whatsapp');
+    if (waBtn) {
+      waBtn.addEventListener('click', () => {
+        const textarea = this.containerEl.querySelector('#msg-preview-text')                       ;
+        const phone = this.currentInputs.phone ? this.currentInputs.phone.replace(/[^0-9]/g, '') : '';
+        const encodedMsg = encodeURIComponent(textarea.value || '');
+
+        let formattedPhone = phone;
+        if (formattedPhone.startsWith('0')) {
+          formattedPhone = '60' + formattedPhone.slice(1);
+        }
+
+        if (formattedPhone) {
+          window.open(`https://wa.me/${formattedPhone}?text=${encodedMsg}`, '_blank');
+        } else {
+          // Open WhatsApp web without specific phone so user can choose recipient
+          window.open(`https://api.whatsapp.com/send?text=${encodedMsg}`, '_blank');
+        }
+      });
+    }
+
+    // Reset button
+    const resetBtn = this.containerEl.querySelector('#btn-msg-reset');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        this.currentInputs.patientName = '';
+        this.currentInputs.phone = '';
+        this.currentInputs.scheduledDate = '';
+        this.currentInputs.oldDate = '';
+        this.currentInputs.newDate = '';
+        this.currentInputs.reason = 'keperluan klinikal';
+        this.currentInputs.subject = '';
+        this.currentInputs.instructions = '';
+        this.currentInputs.customContent = '';
+        this.renderInputs();
+        this.updatePreview();
+        toast.show('Fields reset to default');
+      });
+    }
+  }
+
+          renderInputs()       {
+    const form = this.containerEl.querySelector('#msg-inputs-form')               ;
+    if (!form) return;
+
+    const tpl = this.currentInputs.templateType;
+
+    let html = `
+      <div class="form-row-2">
+        <div class="form-group">
+          <label class="form-label" for="msg-inp-name">Patient Name (Optional)</label>
+          <input type="text" id="msg-inp-name" class="form-input" placeholder="e.g. Encik Ahmad" value="${this.currentInputs.patientName || ''}" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="msg-inp-phone">Phone Number (Optional)</label>
+          <input type="tel" id="msg-inp-phone" class="form-input" placeholder="e.g. 012-345 6789" value="${this.currentInputs.phone || ''}" />
+        </div>
+      </div>
+    `;
+
+    if (tpl === 'blood_collection') {
+      html += `
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label required" for="msg-inp-date">Blood Collection Date</label>
+            <input type="date" id="msg-inp-date" class="form-input" value="${this.currentInputs.scheduledDate || ''}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="msg-inp-time">Time</label>
+            <input type="text" id="msg-inp-time" class="form-input" value="${this.currentInputs.time || 'Sebelum 8.30 pagi'}" />
+          </div>
+        </div>
+      `;
+    } else if (tpl === 'tca_reschedule') {
+      html += `
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label required" for="msg-inp-old-date">Original Appointment Date</label>
+            <input type="date" id="msg-inp-old-date" class="form-input" value="${this.currentInputs.oldDate || ''}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label required" for="msg-inp-new-date">New Appointment Date</label>
+            <input type="date" id="msg-inp-new-date" class="form-input" value="${this.currentInputs.newDate || ''}" />
+          </div>
+        </div>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label" for="msg-inp-time">Time</label>
+            <input type="text" id="msg-inp-time" class="form-input" value="${this.currentInputs.time || '8.30 pagi'}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="msg-inp-reason">Reason for Rescheduling</label>
+            <input type="text" id="msg-inp-reason" class="form-input" placeholder="e.g. pertukaran jadual klinik / cuti umum" value="${this.currentInputs.reason || 'keperluan klinikal'}" />
+          </div>
+        </div>
+      `;
+    } else if (tpl === 'tca_reminder') {
+      html += `
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label required" for="msg-inp-date">TCA Appointment Date</label>
+            <input type="date" id="msg-inp-date" class="form-input" value="${this.currentInputs.scheduledDate || ''}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="msg-inp-time">Time</label>
+            <input type="text" id="msg-inp-time" class="form-input" value="${this.currentInputs.time || '8.30 pagi'}" />
+          </div>
+        </div>
+      `;
+    } else if (tpl === 'missed_appointment') {
+      html += `
+        <div class="form-group">
+          <label class="form-label required" for="msg-inp-date">Missed Appointment Date</label>
+          <input type="date" id="msg-inp-date" class="form-input" value="${this.currentInputs.scheduledDate || ''}" />
+        </div>
+      `;
+    } else if (tpl === 'general_followup') {
+      html += `
+        <div class="form-group">
+          <label class="form-label" for="msg-inp-subject">Subject</label>
+          <input type="text" id="msg-inp-subject" class="form-input" placeholder="e.g. Susulan Pengambilan Ubat" value="${this.currentInputs.subject || ''}" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="msg-inp-instr">Instructions / Message Details</label>
+          <textarea id="msg-inp-instr" class="form-textarea" rows="3" placeholder="Sila hadir ke kaunter farmasi...">${this.currentInputs.instructions || ''}</textarea>
+        </div>
+      `;
+    } else if (tpl === 'custom') {
+      html += `
+        <div class="form-group">
+          <label class="form-label" for="msg-inp-custom">Custom Message Content</label>
+          <textarea id="msg-inp-custom" class="form-textarea" rows="4" placeholder="Tulis mesej klinikal di sini...">${this.currentInputs.customContent || ''}</textarea>
+        </div>
+      `;
+    }
+
+    form.innerHTML = html;
+
+    // Attach listeners to input elements
+    form.querySelectorAll('input, textarea').forEach(input => {
+      input.addEventListener('input', () => {
+        const id = input.id;
+        const val = (input                                          ).value;
+
+        if (id === 'msg-inp-name') this.currentInputs.patientName = val;
+        else if (id === 'msg-inp-phone') this.currentInputs.phone = val;
+        else if (id === 'msg-inp-date') this.currentInputs.scheduledDate = val;
+        else if (id === 'msg-inp-old-date') this.currentInputs.oldDate = val;
+        else if (id === 'msg-inp-new-date') this.currentInputs.newDate = val;
+        else if (id === 'msg-inp-time') this.currentInputs.time = val;
+        else if (id === 'msg-inp-reason') this.currentInputs.reason = val;
+        else if (id === 'msg-inp-subject') this.currentInputs.subject = val;
+        else if (id === 'msg-inp-instr') this.currentInputs.instructions = val;
+        else if (id === 'msg-inp-custom') this.currentInputs.customContent = val;
+
+        this.updatePreview();
+      });
+    });
+  }
+
+          generateMessageText()         {
+    const { templateType, tone, patientName, scheduledDate, oldDate, newDate, time, reason, subject, instructions, customContent } = this.currentInputs;
+
+    const formattedDate = scheduledDate ? formatDisplayDate(scheduledDate) : '[TARIKH]';
+    const formattedOldDate = oldDate ? formatDisplayDate(oldDate) : '[TARIKH ASAL]';
+    const formattedNewDate = newDate ? formatDisplayDate(newDate) : '[TARIKH BAHARU]';
+    const formattedTime = time ? time.trim() : '8.30 pagi';
+    const formattedReason = reason ? reason.trim() : 'keperluan klinikal';
+
+    let salutation = 'Assalamualaikum / Salam sejahtera.';
+    if (patientName && patientName.trim()) {
+      if (tone === 'friendly') salutation = `Assalamualaikum / Salam mesra ${patientName.trim()}.`;
+      else if (tone === 'formal') salutation = `Assalamualaikum dan Salam sejahtera kepada ${patientName.trim()}.`;
+      else salutation = `Assalamualaikum / Salam sejahtera ${patientName.trim()}.`;
+    } else {
+      if (tone === 'friendly') salutation = 'Assalamualaikum / Salam mesra.';
+      else if (tone === 'formal') salutation = 'Assalamualaikum dan Salam sejahtera.';
+    }
+
+    const signature = `MA Ariff\nKlinik Kesihatan Bandar Kulim`;
+
+    switch (templateType) {
+      case 'blood_collection':
+        if (tone === 'friendly') {
+          return `${salutation}\n\nPihak Klinik Kesihatan Bandar Kulim ingin mengingatkan berkenaan temujanji pengambilan darah tuan/puan pada:\n\nTarikh: ${formattedDate}\nMasa: ${formattedTime}\nLokasi: Klinik Kesihatan Bandar Kulim\n\nSemoga tuan/puan sentiasa sihat. Mohon hadir sebelum jam 8.30 pagi ya bagi melancarkan urusan pengambilan darah di makmal.\n\nTerima kasih banyak atas kerjasama tuan/puan.\n\n${signature}`;
+        }
+        if (tone === 'formal') {
+          return `${salutation}\n\nDengan segala hormatnya dimaklumkan bahawa pihak Klinik Kesihatan Bandar Kulim menetapkan temujanji pengambilan darah bagi pihak tuan/puan mengikut ketetapan berikut:\n\nTarikh: ${formattedDate}\nMasa: ${formattedTime}\nLokasi: Klinik Kesihatan Bandar Kulim\n\nSehubungan dengan itu, tuan/puan dipohon hadir sebelum jam 8.30 pagi bagi melancarkan prosedur klinikal berkenaan.\n\nKerjasama tuan/puan amat dihargai. Sekian, terima kasih.\n\n${signature}`;
+        }
+        // Polite (Default specified in prompt)
+        return `${salutation}\n\nDimaklumkan bahawa pihak Klinik Kesihatan Bandar Kulim ingin memaklumkan kepada tuan/puan mengenai pengambilan darah pada:\n\nTarikh: ${formattedDate}\nMasa: ${formattedTime}\nLokasi: Klinik Kesihatan Bandar Kulim\n\nMohon tuan/puan hadir sebelum jam 8.30 pagi bagi melancarkan urusan pengambilan darah.\n\nTerima kasih atas kerjasama tuan/puan.\n\n${signature}`;
+
+      case 'tca_reschedule':
+        if (tone === 'friendly') {
+          return `${salutation}\n\nPihak Klinik Kesihatan Bandar Kulim ingin memaklumkan bahawa temujanji tuan/puan pada ${formattedOldDate} perlu dijadualkan semula atas sebab ${formattedReason}.\n\nTarikh temujanji baharu: ${formattedNewDate}\nMasa: ${formattedTime}\n\nMohon maklum balas jika tarikh baharu ini bersesuaian dengan pihak tuan/puan. Segala kesulitan amat dikesali.\n\nTerima kasih banyak atas kerjasama tuan/puan.\n\n${signature}`;
+        }
+        if (tone === 'formal') {
+          return `${salutation}\n\nAdalah dimaklumkan bahawa temujanji tuan/puan di Klinik Kesihatan Bandar Kulim yang dijadualkan pada ${formattedOldDate} terpaksa dipinda atas sebab ${formattedReason}.\n\nKetetapan tarikh temujanji baharu adalah seperti berikut:\nTarikh: ${formattedNewDate}\nMasa: ${formattedTime}\n\nTuan/puan dipohon membuat pengesahan kehadiran. Segala kesulitan yang timbul amatlah dikesali.\n\nSekian, terima kasih.\n\n${signature}`;
+        }
+        // Polite (Prompt standard)
+        return `${salutation}\n\nDimaklumkan bahawa temujanji tuan/puan di Klinik Kesihatan Bandar Kulim pada ${formattedOldDate} perlu dijadualkan semula kerana ${formattedReason}.\n\nTarikh temujanji baharu: ${formattedNewDate}\nMasa: ${formattedTime}\n\nMohon pengesahan dan kerjasama daripada pihak tuan/puan.\n\nSegala kesulitan amat dikesali.\n\nTerima kasih.\n\n${signature}`;
+
+      case 'tca_reminder':
+        if (tone === 'friendly') {
+          return `${salutation}\n\nIni adalah peringatan mesra temujanji tuan/puan di Klinik Kesihatan Bandar Kulim:\n\nTarikh: ${formattedDate}\nMasa: ${formattedTime}\n\nSemoga tuan/puan sentiasa sihat dan dapat hadir mengikut masa yang ditetapkan. Jika ada kesulitan, sila hubungi kami segera.\n\nTerima kasih.\n\n${signature}`;
+        }
+        if (tone === 'formal') {
+          return `${salutation}\n\nPihak Klinik Kesihatan Bandar Kulim ingin mengingatkan tuan/puan berkenaan temujanji rawatan susulan yang dijadualkan seperti berikut:\n\nTarikh: ${formattedDate}\nMasa: ${formattedTime}\n\nTuan/puan dimohon hadir mengikut ketetapan yang ditetapkan demi kelancaran rawatan.\n\nSekian, terima kasih.\n\n${signature}`;
+        }
+        // Polite (Prompt standard)
+        return `${salutation}\n\nIni merupakan peringatan mesra berkenaan temujanji tuan/puan di Klinik Kesihatan Bandar Kulim.\n\nTarikh: ${formattedDate}\nMasa: ${formattedTime}\n\nMohon hadir mengikut tarikh dan masa yang telah ditetapkan.\n\nTerima kasih.\n\n${signature}`;
+
+      case 'missed_appointment':
+        if (tone === 'friendly') {
+          return `${salutation}\n\nPihak Klinik Kesihatan Bandar Kulim ingin menyemak keadaan tuan/puan susulan temujanji pada ${formattedDate}.\n\nKami amat prihatin dan ingin mengetahui sama ada tuan/puan berkesempatan untuk hadir bagi penetapan tarikh temujanji baharu yang sesuai.\n\nMohon hubungi atau balas mesej ini ya. Terima kasih.\n\n${signature}`;
+        }
+        if (tone === 'formal') {
+          return `${salutation}\n\nMerujuk kepada rekod klinikal, tuan/puan didapati tidak dapat hadir pada temujanji yang dijadualkan pada ${formattedDate}.\n\nPihak Klinik Kesihatan Bandar Kulim memohon maklum balas pihak tuan/puan bagi urusan penjadualan semula temujanji pada kadar segera.\n\nPerhatian dan kerjasama tuan/puan amat dihargai. Sekian, terima kasih.\n\n${signature}`;
+        }
+        // Polite (Prompt standard)
+        return `${salutation}\n\nPihak Klinik Kesihatan Bandar Kulim ingin membuat susulan berkenaan temujanji tuan/puan pada ${formattedDate}.\n\nKami ingin mengetahui sama ada tuan/puan berkesempatan untuk hadir bagi penjadualan semula temujanji.\n\nMohon maklum balas daripada pihak tuan/puan.\n\nTerima kasih.\n\n${signature}`;
+
+      case 'general_followup':
+        const subjText = subject ? `Perkara: ${subject}\n\n` : '';
+        const instrText = instructions ? `${instructions}\n\n` : '';
+        return `${salutation}\n\n${subjText}Pihak Klinik Kesihatan Bandar Kulim ingin membuat susulan bersama pihak tuan/puan.\n\n${instrText}Mohon pihak tuan/puan mengambil maklum berkenaan maklumat di atas. Jika terdapat sebarang pertanyaan, sila hubungi pihak klinik.\n\nTerima kasih atas kerjasama tuan/puan.\n\n${signature}`;
+
+      case 'custom':
+        const body = customContent && customContent.trim()
+          ? customContent.trim()
+          : 'Sila masukkan mesej klinikal di sini.';
+        return `${salutation}\n\n${body}\n\n${signature}`;
+
+      default:
+        return '';
+    }
+  }
+
+          updatePreview()       {
+    const textarea = this.containerEl.querySelector('#msg-preview-text')                       ;
+    if (textarea) {
+      textarea.value = this.generateMessageText();
+    }
+  }
+}
+
+
+  // --- Module: components/settings-modal ---
+                                              
+class SettingsModal {
+          overlayEl             ;
+          activeTab              = 'message_gen';
+          messageGenerator                  ;
+          getRecordsCallback                                          = null;
+          onImportCallback                                                                                  = null;
+          previousActiveElement                     = null;
+
+  constructor() {
+    this.messageGenerator = new MessageGenerator();
+
+    this.overlayEl = document.createElement('div');
+    this.overlayEl.className = 'modal-overlay';
+    this.overlayEl.setAttribute('role', 'dialog');
+    this.overlayEl.setAttribute('aria-modal', 'true');
+    this.overlayEl.setAttribute('aria-label', 'Settings and Utilities');
+
+    this.overlayEl.innerHTML = `
+      <div class="bottom-sheet settings-sheet" style="max-width: 680px; max-height: 90vh;">
+        <div class="sheet-grab-bar"></div>
+        <div class="sheet-header">
+          <div>
+            <span class="sheet-title">Settings / More</span>
+            <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">
+              Clinical Utilities & Data Management
+            </div>
+          </div>
+          <button type="button" class="btn-icon" data-action="close" aria-label="Close settings">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Top Segmented Navigation -->
+        <div class="settings-nav-bar" style="padding: 0 20px 10px 20px;">
+          <div class="segmented-control settings-seg-ctrl" role="tablist">
+            <button type="button" class="segment-btn is-active" data-set-tab="message_gen">Message Generator</button>
+            <button type="button" class="segment-btn" data-set-tab="gdrive">Google Drive</button>
+            <button type="button" class="segment-btn" data-set-tab="local_data">Local Data</button>
+            <button type="button" class="segment-btn" data-set-tab="about">About</button>
+          </div>
+        </div>
+
+        <div class="sheet-body settings-body" id="settings-content" style="padding-top: 8px;">
+          <!-- Tab 1: Message Generator (Default) -->
+          <div id="tab-pane-message_gen" class="settings-tab-pane"></div>
+
+          <!-- Tab 2: Google Drive Backup -->
+          <div id="tab-pane-gdrive" class="settings-tab-pane" style="display: none;"></div>
+
+          <!-- Tab 3: Local Data Backup -->
+          <div id="tab-pane-local_data" class="settings-tab-pane" style="display: none;"></div>
+
+          <!-- Tab 4: About & Privacy -->
+          <div id="tab-pane-about" class="settings-tab-pane" style="display: none;"></div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(this.overlayEl);
+
+    // Attach message generator element
+    const msgPane = this.overlayEl.querySelector('#tab-pane-message_gen')               ;
+    msgPane.appendChild(this.messageGenerator.getElement());
+
+    this.bindEvents();
+    this.renderGDrivePane();
+    this.renderLocalDataPane();
+    this.renderAboutPane();
+  }
+
+          bindEvents()       {
+    this.overlayEl.addEventListener('click', (e) => {
+      const target = e.target               ;
+      if (target === this.overlayEl || target.closest('[data-action="close"]')) {
+        this.close();
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.isOpen()) {
+        this.close();
+      }
+    });
+
+    // Top Segment Switching
+    const segContainer = this.overlayEl.querySelector('.settings-seg-ctrl')               ;
+    segContainer.addEventListener('click', (e) => {
+      const btn = (e.target               ).closest('.segment-btn')                     ;
+      if (!btn) return;
+      const targetTab = btn.getAttribute('data-set-tab')               ;
+      this.switchTab(targetTab);
+    });
+
+    // Listen to Google Drive Service status changes
+    googleDriveService.setStatusListener((status, lastTime, lastError) => {
+      this.updateGDriveStatusUI(status, lastTime, lastError);
+    });
+  }
+
+         switchTab(tab             )       {
+    this.activeTab = tab;
+    const segContainer = this.overlayEl.querySelector('.settings-seg-ctrl')               ;
+    segContainer.querySelectorAll('.segment-btn').forEach(btn => {
+      const isMatch = btn.getAttribute('data-set-tab') === tab;
+      btn.classList.toggle('is-active', isMatch);
+    });
+
+    this.overlayEl.querySelectorAll('.settings-tab-pane').forEach((pane     ) => {
+      pane.style.display = pane.id === `tab-pane-${tab}` ? 'block' : 'none';
+    });
+
+    if (tab === 'gdrive') {
+      this.refreshGDriveFileList();
+    }
+  }
+
+          renderGDrivePane()       {
+    const pane = this.overlayEl.querySelector('#tab-pane-gdrive')               ;
+    const clientId = googleDriveService.getClientId();
+    const status = googleDriveService.getStatus();
+    const lastTime = googleDriveService.getLastBackupTime();
+
+    pane.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <!-- Status Card -->
+        <div class="gdrive-status-card" style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-text-secondary); letter-spacing: 0.03em;">Backup Status</div>
+              <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                <span id="gdrive-status-dot" class="status-dot"></span>
+                <span id="gdrive-status-label" style="font-size: 16px; font-weight: 700;">${status}</span>
+              </div>
+            </div>
+            <div id="gdrive-auth-actions"></div>
+          </div>
+
+          <div id="gdrive-last-backup-text" style="font-size: 12.5px; color: var(--color-text-secondary); margin-top: 10px;">
+            ${lastTime ? `Last Successful Backup: <strong>${new Date(lastTime).toLocaleString()}</strong>` : 'No Google Drive backup recorded yet on this device.'}
+          </div>
+
+          <div id="gdrive-error-banner" style="display: none; margin-top: 10px; padding: 8px 12px; background: var(--color-destructive-bg); color: var(--color-destructive); border-radius: 8px; font-size: 12.5px;"></div>
+        </div>
+
+        <!-- Destination Folder & Manual Backup -->
+        <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
+          <h4 style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">Designated Backup Folder</h4>
+          <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 10px;">
+            Target: <code>${GDRIVE_FOLDER_ID}</code>
+          </p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <a href="${GDRIVE_FOLDER_URL}" target="_blank" rel="noopener noreferrer" class="btn-secondary btn-msg-action" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              <span>Open in Google Drive</span>
+            </a>
+            <button type="button" id="btn-gdrive-backup-now" class="btn-primary btn-msg-action">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>Backup Now</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Google OAuth Client ID Configuration -->
+        <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
+          <h4 style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">Google OAuth 2.0 Client ID</h4>
+          <p style="font-size: 12.5px; color: var(--color-text-secondary); margin-bottom: 10px;">
+            Google requires a Web Client ID configured with your GitHub Pages origin. Enter your Google OAuth Client ID below:
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="gdrive-client-id-input" class="form-input" placeholder="e.g. 123456789-xxxx.apps.googleusercontent.com" value="${clientId}" style="font-family: monospace; font-size: 12.5px;" />
+            <button type="button" id="btn-save-gdrive-client-id" class="btn-secondary" style="font-weight: 600; flex-shrink: 0;">Save ID</button>
+          </div>
+        </div>
+
+        <!-- Available Backups in Google Drive for Restore -->
+        <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <h4 style="font-size: 15px; font-weight: 600;">Restore from Google Drive</h4>
+            <button type="button" id="btn-refresh-gdrive-files" class="btn-icon" style="width: 28px; height: 28px;" title="Refresh list">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>
+          </div>
+          <p style="font-size: 12.5px; color: var(--color-text-secondary); margin-bottom: 10px;">
+            Select a verified backup file to restore. A safety local snapshot is automatically created before any database changes.
+          </p>
+          <div id="gdrive-file-list" style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 12.5px; color: var(--color-text-tertiary); font-style: italic;">
+              ${status === 'Connected' ? 'Loading backups from Google Drive...' : 'Connect Google Drive above to view backups.'}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.bindGDrivePaneEvents();
+    this.updateGDriveStatusUI(status, lastTime);
+  }
+
+          bindGDrivePaneEvents()       {
+    const pane = this.overlayEl.querySelector('#tab-pane-gdrive')               ;
+
+    // Save Client ID
+    const saveIdBtn = pane.querySelector('#btn-save-gdrive-client-id')                     ;
+    const idInput = pane.querySelector('#gdrive-client-id-input')                    ;
+    if (saveIdBtn && idInput) {
+      saveIdBtn.addEventListener('click', () => {
+        const val = idInput.value.trim();
+        googleDriveService.setClientId(val);
+        toast.show('Client ID saved');
+      });
+    }
+
+    // Backup Now
+    const backupNowBtn = pane.querySelector('#btn-gdrive-backup-now')                     ;
+    if (backupNowBtn) {
+      backupNowBtn.addEventListener('click', async () => {
+        if (!this.getRecordsCallback) return;
+        backupNowBtn.disabled = true;
+        backupNowBtn.textContent = 'Uploading...';
+        try {
+          const records = await this.getRecordsCallback();
+          const ok = await googleDriveService.uploadBackup(records);
+          if (ok) {
+            toast.show('Backup uploaded to Google Drive');
+            this.refreshGDriveFileList();
+          } else {
+            toast.show('Backup failed. Check connection.');
+          }
+        } finally {
+          backupNowBtn.disabled = false;
+          backupNowBtn.innerHTML = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span>Backup Now</span>
+          `;
+        }
+      });
+    }
+
+    // Refresh Files
+    const refreshBtn = pane.querySelector('#btn-refresh-gdrive-files')                     ;
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => this.refreshGDriveFileList());
+    }
+  }
+
+          updateGDriveStatusUI(status        , lastTime         , lastError         )       {
+    const pane = this.overlayEl.querySelector('#tab-pane-gdrive')               ;
+    if (!pane) return;
+
+    const dot = pane.querySelector('#gdrive-status-dot')               ;
+    const label = pane.querySelector('#gdrive-status-label')               ;
+    const authActions = pane.querySelector('#gdrive-auth-actions')               ;
+    const lastText = pane.querySelector('#gdrive-last-backup-text')               ;
+    const errorBanner = pane.querySelector('#gdrive-error-banner')               ;
+
+    if (label) label.textContent = status;
+
+    if (dot) {
+      dot.className = 'status-dot';
+      if (status === 'Connected') dot.classList.add('status-connected');
+      else if (status === 'Backup Successful') dot.classList.add('status-success');
+      else if (status === 'Backing Up') dot.classList.add('status-backingup');
+      else if (status === 'Backup Failed') dot.classList.add('status-failed');
+      else dot.classList.add('status-disconnected');
+    }
+
+    if (lastText && lastTime) {
+      lastText.innerHTML = `Last Successful Backup: <strong>${new Date(lastTime).toLocaleString()}</strong>`;
+    }
+
+    if (errorBanner) {
+      if (lastError) {
+        errorBanner.textContent = lastError;
+        errorBanner.style.display = 'block';
+      } else {
+        errorBanner.style.display = 'none';
+      }
+    }
+
+    if (authActions) {
+      if (status === 'Not Connected') {
+        authActions.innerHTML = `
+          <button type="button" id="btn-gdrive-connect" class="btn-primary" style="font-size: 13px; padding: 6px 14px;">
+            Connect Account
+          </button>
+        `;
+        authActions.querySelector('#btn-gdrive-connect')?.addEventListener('click', async () => {
+          const ok = await googleDriveService.authorize();
+          if (ok) {
+            toast.show('Connected to Google Drive');
+            this.refreshGDriveFileList();
+          }
+        });
+      } else {
+        authActions.innerHTML = `
+          <button type="button" id="btn-gdrive-disconnect" class="btn-secondary" style="font-size: 12.5px; padding: 4px 10px;">
+            Disconnect
+          </button>
+        `;
+        authActions.querySelector('#btn-gdrive-disconnect')?.addEventListener('click', () => {
+          googleDriveService.disconnect();
+          toast.show('Disconnected from Google Drive');
+        });
+      }
+    }
+  }
+
+          async refreshGDriveFileList()                {
+    const listEl = this.overlayEl.querySelector('#gdrive-file-list')               ;
+    if (!listEl) return;
+
+    if (googleDriveService.getStatus() === 'Not Connected') {
+      listEl.innerHTML = `<div style="font-size: 12.5px; color: var(--color-text-tertiary); font-style: italic;">Connect Google Drive above to list backups.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = `<div style="font-size: 12.5px; color: var(--color-text-secondary);">Querying Google Drive folder...</div>`;
+    const files = await googleDriveService.listBackups();
+
+    if (files.length === 0) {
+      listEl.innerHTML = `<div style="font-size: 12.5px; color: var(--color-text-secondary); padding: 8px 0;">No backup files found in designated Google Drive folder yet. Tap "Backup Now" to create your first backup.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = files.map(f => {
+      const createdDate = f.createdTime ? new Date(f.createdTime).toLocaleString() : '';
+      return `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--color-bg-primary); border-radius: var(--radius-sm); font-size: 13px;">
+          <div>
+            <div style="font-weight: 600; font-family: monospace; font-size: 12px;">${f.name}</div>
+            <div style="font-size: 11.5px; color: var(--color-text-secondary); margin-top: 2px;">${createdDate}</div>
+          </div>
+          <button type="button" class="btn-secondary btn-restore-file" data-file-id="${f.id}" data-file-name="${f.name}" style="font-size: 12px; padding: 4px 10px;">
+            Restore
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('.btn-restore-file').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const fileId = btn.getAttribute('data-file-id');
+        const fileName = btn.getAttribute('data-file-name');
+        if (!fileId || !fileName) return;
+
+        await this.handleRestoreGDriveFile(fileId, fileName);
+      });
+    });
+  }
+
+          async handleRestoreGDriveFile(fileId        , fileName        )                {
+    try {
+      toast.show('Downloading backup from Google Drive...');
+      const payload = await googleDriveService.downloadBackup(fileId);
+
+      const records = Array.isArray(payload.records) ? payload.records : (Array.isArray(payload) ? payload : null);
+      if (!records) {
+        throw new Error('Invalid backup file: no records found');
+      }
+
+      const count = records.length;
+      const exportTime = payload.exportedAt ? new Date(payload.exportedAt).toLocaleString() : 'Unknown';
+
+      // Confirmation Dialogue
+      const confirmed = await confirmSheet.show({
+        title: 'Restore Backup from Google Drive?',
+        message: `File: "${fileName}"\nExported: ${exportTime}\nRecords Count: ${count} patients\n\nRestoring will replace current local database with this backup. A safety backup of current data will be created first.`,
+        confirmLabel: 'Restore Database',
+        cancelLabel: 'Cancel',
+        isDestructive: true
+      });
+
+      if (!confirmed) return;
+
+      // Create safety snapshot of local data before restoration
+      if (this.getRecordsCallback) {
+        const currentRecords = await this.getRecordsCallback();
+        googleDriveService.savePreRestoreSafetySnapshot(currentRecords);
+      }
+
+      if (this.onImportCallback) {
+        await this.onImportCallback(records, 'replace');
+        toast.show(`Restored ${count} patient records`);
+        this.close();
+      }
+    } catch (err     ) {
+      console.error(err);
+      toast.show(`Restore failed: ${err.message || 'Error'}`);
+    }
+  }
+
+          renderLocalDataPane()       {
+    const pane = this.overlayEl.querySelector('#tab-pane-local_data')               ;
+    pane.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
+          <h4 style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">Export Local JSON</h4>
+          <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px;">
+            Download an uncompressed JSON file containing all patient records, TCA histories, and blood collection records stored on this device.
+          </p>
+          <button type="button" id="btn-export-local-json" class="btn-primary" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Export JSON File</span>
+          </button>
+        </div>
+
+        <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
+          <h4 style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">Import Local JSON</h4>
+          <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px;">
+            Restore or merge patient records from an ARV KKBK JSON backup file. Validates schema before applying.
+          </p>
+          <input type="file" id="local-file-import-input" accept=".json,application/json" style="display: none;" />
+          <button type="button" id="btn-trigger-local-import" class="btn-secondary" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span>Select JSON File</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Wire local export/const importBtn = pane.querySelector('#btn-trigger-local-import')                     ;
+    const fileInput = pane.querySelector('#local-file-import-input')                    ;
+
+    exportBtn?.addEventListener('click', async () => {
+      if (this.getRecordsCallback) {
+        const records = await this.getRecordsCallback();
+        exportRecordsToJSON(records);
+        toast.show(`Exported ${records.length} records`);
+      }
+    });
+
+    importBtn?.addEventListener('click', () => {
+      fileInput?.click();
+    });
+
+    fileInput?.addEventListener('change', async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const json = JSON.parse(text);
+        const { valid, records, error } = validateImportJSON(json);
+
+        if (!valid || !records) {
+          toast.show(`Import error: ${error || 'Invalid JSON format'}`);
+          return;
+        }
+
+        const modeChoice = await confirmSheet.show({
+          title: 'Import Records',
+          message: `Found ${records.length} valid patient records in file "${file.name}".\n\nChoose 'Merge' to combine with existing data, or 'Replace' to overwrite all existing records.`,
+          confirmLabel: 'Merge Records',
+          cancelLabel: 'Replace All',
+          isDestructive: false
+        });
+
+        const mode                      = modeChoice ? 'merge' : 'replace';
+
+        if (this.onImportCallback) {
+          await this.onImportCallback(records, mode);
+          toast.show(`Successfully imported ${records.length} records (${mode})`);
+          this.close();
+        }
+      } catch (err     ) {
+        toast.show(`Failed to parse file: ${err.message || 'Error'}`);
+      } finally {
+        fileInput.value = '';
+      }
+    });
+  }
+
+          renderAboutPane()       {
+    const pane = this.overlayEl.querySelector('#tab-pane-about')               ;
+    pane.innerHTML = `
+      <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 18px; font-size: 13.5px; line-height: 1.5;">
+        <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 6px;">ARV KKBK — Personal Record Tracker</h4>
+        <p style="color: var(--color-text-secondary); margin-bottom: 12px;">
+          Designed for Klinik Kesihatan Bandar Kulim (KKBK) Antiretroviral & TCA clinical administration.
+        </p>
+
+        <div style="background: var(--color-bg-primary); border: 1px solid var(--color-separator); border-radius: var(--radius-md); padding: 12px; margin-bottom: 14px; font-size: 12.5px;">
+          <strong>Laboratory Routing Rules:</strong>
+          <ul style="margin-left: 18px; margin-top: 6px;">
+            <li>All samples collected at: <strong>Klinik Kesihatan Bandar Kulim</strong>.</li>
+            <li>CD4 samples sent to: <strong>KK Taman Intan</strong>.</li>
+            <li>HIV Viral Load samples sent to: <strong>Hospital Sultanah Bahiyah (HSB)</strong>.</li>
+          </ul>
+        </div>
+
+        <div style="font-size: 12px; color: var(--color-text-tertiary); line-height: 1.45;">
+          <strong>Security Notice:</strong> All data is stored locally in client-side IndexedDB on this device. Never upload unencrypted identifiable patient medical records to public cloud repositories without appropriate KKM approvals.
+        </div>
+      </div>
+    `;
+  }
+
+         open(
+    getRecords                                ,
+    onImport                                                                        ,
+    initialTab              = 'message_gen',
+    triggerEl              
+  )       {
+    this.getRecordsCallback = getRecords;
+    this.onImportCallback = onImport;
+    this.previousActiveElement = triggerEl || (document.activeElement               );
+
+    this.switchTab(initialTab);
+    document.body.classList.add('modal-open');
+    this.overlayEl.classList.add('is-open');
   }
 
          close()       {
@@ -4432,13 +6660,19 @@ function createHeader(callbacks                 )              {
           ${getThemeIcon(themeManager.getMode())}
         </button>
 
-        <button type="button" class="btn-pill header-pill-btn" id="btn-open-data" aria-label="Open data backup and restore">
+        <button type="button" class="btn-pill header-pill-btn" id="btn-open-data" aria-label="Open settings, message generator and backups">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
+            <line x1="4" y1="21" x2="4" y2="14"></line>
+            <line x1="4" y1="10" x2="4" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12" y2="3"></line>
+            <line x1="20" y1="21" x2="20" y2="16"></line>
+            <line x1="20" y1="12" x2="20" y2="3"></line>
+            <line x1="1" y1="14" x2="7" y2="14"></line>
+            <line x1="9" y1="8" x2="15" y2="8"></line>
+            <line x1="17" y1="16" x2="23" y2="16"></line>
           </svg>
-          <span>Data</span>
+          <span>Settings / More</span>
         </button>
 
         <button type="button" class="btn-pill btn-desktop-add" id="btn-header-add" aria-label="Add Patient">
@@ -4495,8 +6729,9 @@ class App {
           recordModal              ;
           detailsModal               ;
           sortSheet            ;
-          dataModal            ;
+          settingsModal                ;
           appointmentModal                   ;
+          bloodCollectionModal                       ;
 
           recordCountEl              ;
           sortTriggerEl                    ;
@@ -4514,8 +6749,9 @@ class App {
     this.recordModal = new RecordModal();
     this.detailsModal = new DetailsModal();
     this.sortSheet = new SortSheet();
-    this.dataModal = new DataModal();
+    this.settingsModal = new SettingsModal();
     this.appointmentModal = new AppointmentModal();
+    this.bloodCollectionModal = new BloodCollectionModal();
 
     // 3. Initialize navigation bar
     this.navBar = new NavigationBar(this.activeTab, (newTab) => {
@@ -4544,7 +6780,7 @@ class App {
       activeTab: this.activeTab,
       onTabSelect: (tab) => this.navBar.setActiveTab(tab),
       onAddClick: () => this.recordModal.open(null, this.records, (rec) => this.handleSaveRecord(rec)),
-      onDataClick: () => this.dataModal.open(
+      onDataClick: () => this.settingsModal.open(
         () => Promise.resolve(this.records),
         (recs, mode) => this.handleImportRecords(recs, mode)
       ),
@@ -4837,7 +7073,9 @@ class App {
       onChangeCategory: (rec, newCategory) => this.handleChangeCategory(rec, newCategory),
       onScheduleTca: (rec) => this.handleScheduleTca(rec),
       onRescheduleTca: (rec, apt) => this.handleRescheduleTca(rec, apt),
-      onUpdateStatus: (rec, apt, status) => this.handleUpdateStatus(rec, apt, status)
+      onUpdateStatus: (rec, apt, status) => this.handleUpdateStatus(rec, apt, status),
+      onBloodAction: (rec, collection, action) => this.handleBloodAction(rec, collection, action),
+      onScheduleBloodCollection: (rec) => this.handleScheduleBloodCollection(rec)
     };
   }
 
@@ -4876,6 +7114,7 @@ class App {
     }
 
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
   }
 
           updateSummaryMetrics()       {
@@ -4968,6 +7207,7 @@ class App {
     this.detailsModal.close();
     toast.show('Patient record deleted');
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
   }
 
           async handleToggleActive(record               , makeActive         )                {
@@ -4987,6 +7227,7 @@ class App {
     toast.show(makeActive ? 'Patient reactivated' : 'Patient deactivated');
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
   }
 
           async handleChangeCategory(record               , newCategory             )                {
@@ -4995,6 +7236,7 @@ class App {
     toast.show(`Category changed to ${newCategory} Patient`);
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
   }
 
           handleScheduleTca(record               )       {
@@ -5013,6 +7255,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
+        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
       }
       toast.show('New TCA appointment scheduled');
     });
@@ -5026,6 +7269,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
+        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
       }
       toast.show('Appointment rescheduled');
     });
@@ -5043,6 +7287,7 @@ class App {
     this.updateRecordInState(updated);
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
     toast.show(`Appointment recorded as ${newStatus}`);
 
     // If marked Attended and patient was New Patient, suggest changing to Existing Patient
@@ -5059,6 +7304,96 @@ class App {
         await this.handleChangeCategory(updated, 'Existing');
       }
     }
+  }
+
+          handleBloodAction(
+    record               ,
+    collection                            ,
+    action                  
+  )       {
+    this.bloodCollectionModal.open(record, collection, action, async (data) => {
+      if (data.action === 'attend') {
+        await recordStorage.updateBloodCollectionStatus(
+          record.id,
+          data.collectionId,
+          'Attended',
+          data.actualDate,
+          data.actualTime,
+          data.notes
+        );
+        toast.show('Sample collection recorded as Attended');
+      } else if (data.action === 'dna') {
+        await recordStorage.updateBloodCollectionStatus(
+          record.id,
+          data.collectionId,
+          'DNA',
+          undefined,
+          undefined,
+          data.notes
+        );
+        toast.show('Blood appointment recorded as DNA');
+      } else if (data.action === 'reschedule') {
+        if (!data.newDate) return;
+        await recordStorage.rescheduleBloodCollection(
+          record.id,
+          data.collectionId,
+          data.newDate,
+          data.reason,
+          data.newTime
+        );
+        toast.show('Blood collection date rescheduled');
+      } else if (data.action === 'cancel') {
+        await recordStorage.updateBloodCollectionStatus(
+          record.id,
+          data.collectionId,
+          'Cancelled',
+          undefined,
+          undefined,
+          data.notes
+        );
+        toast.show('Blood collection appointment cancelled');
+      }
+
+      const updated = await recordStorage.get(record.id);
+      if (updated) {
+        this.updateRecordInState(updated);
+        this.detailsModal.updateRecord(updated);
+        this.renderCurrentView();
+        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+      }
+    });
+  }
+
+          handleScheduleBloodCollection(record               )       {
+    this.appointmentModal.open(record, 'new', null, async (data) => {
+      if (data.bloodInvestigationDate) {
+        await recordStorage.addBloodCollection(record.id, {
+          scheduledDate: data.bloodInvestigationDate,
+          investigations: data.bloodInvestigations,
+          investigationOther: data.bloodOther,
+          notes: data.notes
+        });
+      }
+      if (data.tcaDate) {
+        await recordStorage.addAppointment(record.id, {
+          tcaDate: data.tcaDate,
+          status: 'Scheduled',
+          notes: data.notes,
+          plan: data.plan,
+          bloodInvestigationDate: data.bloodInvestigationDate,
+          bloodInvestigations: data.bloodInvestigations,
+          bloodOther: data.bloodOther
+        });
+      }
+      const updated = await recordStorage.get(record.id);
+      if (updated) {
+        this.updateRecordInState(updated);
+        this.detailsModal.updateRecord(updated);
+        this.renderCurrentView();
+        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+      }
+      toast.show('New appointment saved');
+    });
   }
 
           updateRecordInState(updated               )       {
@@ -5080,6 +7415,7 @@ class App {
     await recordStorage.bulkImport(records, mode);
     this.records = await recordStorage.list();
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
   }
 
           registerServiceWorker()       {

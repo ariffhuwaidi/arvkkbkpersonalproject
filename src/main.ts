@@ -2,21 +2,32 @@ import './styles/theme.css';
 import './styles/main.css';
 import './styles/components.css';
 
-import type { PatientRecord, SortField, PatientTypeFilter, ActiveTab, PatientType, TCAAppointment, AppointmentStatus } from './types';
+import type {
+  PatientRecord,
+  SortField,
+  PatientTypeFilter,
+  ActiveTab,
+  PatientType,
+  TCAAppointment,
+  AppointmentStatus,
+  BloodCollectionAppointment
+} from './types';
 import { recordStorage } from './storage/indexeddb-storage';
 import { themeManager } from './utils/theme';
 import { getSavedSort, saveSortPreference, sortRecords, SORT_OPTIONS } from './utils/sort';
 import { filterRecords } from './utils/search';
 import { generateDemoRecords } from './utils/demo-data';
 import { isDatePast, getDaysDifference } from './utils/date';
+import { googleDriveBackupService } from './utils/google-drive';
 
 import { createHeader } from './components/header';
 import { createRecordCard, RecordCardActions } from './components/record-card';
 import { RecordModal } from './components/record-modal';
 import { DetailsModal, DetailsModalHandlers } from './components/details-modal';
 import { SortSheet } from './components/sort-sheet';
-import { DataModal } from './components/data-modal';
+import { SettingsModal } from './components/settings-modal';
 import { AppointmentModal } from './components/appointment-modal';
+import { BloodCollectionModal, BloodModalAction } from './components/blood-collection-modal';
 import { confirmSheet } from './components/confirm-sheet';
 import { toast } from './components/toast';
 import { NavigationBar, getSavedTab } from './components/nav-bar';
@@ -33,8 +44,9 @@ class App {
   private recordModal!: RecordModal;
   private detailsModal!: DetailsModal;
   private sortSheet!: SortSheet;
-  private dataModal!: DataModal;
+  private settingsModal!: SettingsModal;
   private appointmentModal!: AppointmentModal;
+  private bloodCollectionModal!: BloodCollectionModal;
 
   private recordCountEl!: HTMLElement;
   private sortTriggerEl!: HTMLButtonElement;
@@ -52,8 +64,9 @@ class App {
     this.recordModal = new RecordModal();
     this.detailsModal = new DetailsModal();
     this.sortSheet = new SortSheet();
-    this.dataModal = new DataModal();
+    this.settingsModal = new SettingsModal();
     this.appointmentModal = new AppointmentModal();
+    this.bloodCollectionModal = new BloodCollectionModal();
 
     // 3. Initialize navigation bar
     this.navBar = new NavigationBar(this.activeTab, (newTab) => {
@@ -82,7 +95,7 @@ class App {
       activeTab: this.activeTab,
       onTabSelect: (tab) => this.navBar.setActiveTab(tab),
       onAddClick: () => this.recordModal.open(null, this.records, (rec) => this.handleSaveRecord(rec)),
-      onDataClick: () => this.dataModal.open(
+      onDataClick: () => this.settingsModal.open(
         () => Promise.resolve(this.records),
         (recs, mode) => this.handleImportRecords(recs, mode)
       ),
@@ -375,7 +388,9 @@ class App {
       onChangeCategory: (rec, newCategory) => this.handleChangeCategory(rec, newCategory),
       onScheduleTca: (rec) => this.handleScheduleTca(rec),
       onRescheduleTca: (rec, apt) => this.handleRescheduleTca(rec, apt),
-      onUpdateStatus: (rec, apt, status) => this.handleUpdateStatus(rec, apt, status)
+      onUpdateStatus: (rec, apt, status) => this.handleUpdateStatus(rec, apt, status),
+      onBloodAction: (rec, collection, action) => this.handleBloodAction(rec, collection, action),
+      onScheduleBloodCollection: (rec) => this.handleScheduleBloodCollection(rec)
     };
   }
 
@@ -414,6 +429,7 @@ class App {
     }
 
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
   }
 
   private updateSummaryMetrics(): void {
@@ -506,6 +522,7 @@ class App {
     this.detailsModal.close();
     toast.show('Patient record deleted');
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
   }
 
   private async handleToggleActive(record: PatientRecord, makeActive: boolean): Promise<void> {
@@ -525,6 +542,7 @@ class App {
     toast.show(makeActive ? 'Patient reactivated' : 'Patient deactivated');
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
   }
 
   private async handleChangeCategory(record: PatientRecord, newCategory: PatientType): Promise<void> {
@@ -533,6 +551,7 @@ class App {
     toast.show(`Category changed to ${newCategory} Patient`);
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
   }
 
   private handleScheduleTca(record: PatientRecord): void {
@@ -551,6 +570,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
+        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
       }
       toast.show('New TCA appointment scheduled');
     });
@@ -564,6 +584,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
+        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
       }
       toast.show('Appointment rescheduled');
     });
@@ -581,6 +602,7 @@ class App {
     this.updateRecordInState(updated);
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
     toast.show(`Appointment recorded as ${newStatus}`);
 
     // If marked Attended and patient was New Patient, suggest changing to Existing Patient
@@ -597,6 +619,96 @@ class App {
         await this.handleChangeCategory(updated, 'Existing');
       }
     }
+  }
+
+  private handleBloodAction(
+    record: PatientRecord,
+    collection: BloodCollectionAppointment,
+    action: BloodModalAction
+  ): void {
+    this.bloodCollectionModal.open(record, collection, action, async (data) => {
+      if (data.action === 'attend') {
+        await recordStorage.updateBloodCollectionStatus(
+          record.id,
+          data.collectionId,
+          'Attended',
+          data.actualDate,
+          data.actualTime,
+          data.notes
+        );
+        toast.show('Sample collection recorded as Attended');
+      } else if (data.action === 'dna') {
+        await recordStorage.updateBloodCollectionStatus(
+          record.id,
+          data.collectionId,
+          'DNA',
+          undefined,
+          undefined,
+          data.notes
+        );
+        toast.show('Blood appointment recorded as DNA');
+      } else if (data.action === 'reschedule') {
+        if (!data.newDate) return;
+        await recordStorage.rescheduleBloodCollection(
+          record.id,
+          data.collectionId,
+          data.newDate,
+          data.reason,
+          data.newTime
+        );
+        toast.show('Blood collection date rescheduled');
+      } else if (data.action === 'cancel') {
+        await recordStorage.updateBloodCollectionStatus(
+          record.id,
+          data.collectionId,
+          'Cancelled',
+          undefined,
+          undefined,
+          data.notes
+        );
+        toast.show('Blood collection appointment cancelled');
+      }
+
+      const updated = await recordStorage.get(record.id);
+      if (updated) {
+        this.updateRecordInState(updated);
+        this.detailsModal.updateRecord(updated);
+        this.renderCurrentView();
+        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+      }
+    });
+  }
+
+  private handleScheduleBloodCollection(record: PatientRecord): void {
+    this.appointmentModal.open(record, 'new', null, async (data) => {
+      if (data.bloodInvestigationDate) {
+        await recordStorage.addBloodCollection(record.id, {
+          scheduledDate: data.bloodInvestigationDate,
+          investigations: data.bloodInvestigations,
+          investigationOther: data.bloodOther,
+          notes: data.notes
+        });
+      }
+      if (data.tcaDate) {
+        await recordStorage.addAppointment(record.id, {
+          tcaDate: data.tcaDate,
+          status: 'Scheduled',
+          notes: data.notes,
+          plan: data.plan,
+          bloodInvestigationDate: data.bloodInvestigationDate,
+          bloodInvestigations: data.bloodInvestigations,
+          bloodOther: data.bloodOther
+        });
+      }
+      const updated = await recordStorage.get(record.id);
+      if (updated) {
+        this.updateRecordInState(updated);
+        this.detailsModal.updateRecord(updated);
+        this.renderCurrentView();
+        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+      }
+      toast.show('New appointment saved');
+    });
   }
 
   private updateRecordInState(updated: PatientRecord): void {
@@ -618,6 +730,7 @@ class App {
     await recordStorage.bulkImport(records, mode);
     this.records = await recordStorage.list();
     this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
   }
 
   private registerServiceWorker(): void {
