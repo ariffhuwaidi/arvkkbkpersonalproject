@@ -2531,6 +2531,7 @@ class GoogleDriveBackupService {
 }
 
 const googleDriveService = new GoogleDriveBackupService();
+const googleDriveBackupService = googleDriveService;
 
 
   // --- Module: components/blood-collection-modal ---

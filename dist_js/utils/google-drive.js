@@ -406,3 +406,4 @@ export class GoogleDriveBackupService {
 }
 
 export const googleDriveService = new GoogleDriveBackupService();
+export const googleDriveBackupService = googleDriveService;
