@@ -426,7 +426,7 @@ export class DetailsModal {
 
     // Facility Routing Notice
     const labRoutingNoticeHtml = `
-      <div class="lab-routing-notice" style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; padding: 10px 12px; background: var(--color-bg-primary); border: 0.5px solid var(--color-separator); border-left: 3px solid var(--color-accent); border-radius: var(--radius-md); margin-bottom: 12px; line-height: 1.45;">
+      <div class="lab-routing-notice" style="display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; padding: 10px 12px; background: var(--color-bg-primary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-md); margin-bottom: 12px; line-height: 1.45;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px; color: var(--color-accent);">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="12" y1="16" x2="12" y2="12"></line>

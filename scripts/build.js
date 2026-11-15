@@ -125,7 +125,7 @@ console.log('Standalone app.bundle.js created successfully.');
 
 // Bundle CSS
 console.log('Generating standalone app.bundle.css...');
-const cssFiles = ['theme.css', 'main.css', 'components.css'];
+const cssFiles = ['theme.css', 'main.css', 'components.css', 'redesign.css'];
 let bundleCss = '/* ARV KKBK - Combined Stylesheet */\n\n';
 for (const file of cssFiles) {
   const filePath = path.join(srcDir, 'styles', file);

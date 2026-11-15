@@ -1901,7 +1901,6 @@ body.modal-open {
 /* Deactivated record styling */
 .record-card.is-deactivated {
   opacity: 0.75;
-  border-left: 3px solid var(--color-separator-opaque);
 }
 .patient-status-inactive-badge {
   font-size: 11px;
@@ -2137,7 +2136,6 @@ body.modal-open {
 /* Deactivated record styling */
 .record-card.is-deactivated {
   opacity: 0.75;
-  border-left: 3px solid var(--color-separator-opaque);
 }
 .patient-status-inactive-badge {
   font-size: 11px;
@@ -2879,5 +2877,242 @@ body.modal-open {
   color: var(--color-text-placeholder) !important;
 }
 
+
+
+/* --- redesign.css --- */
+/* ==========================================================================
+   REDESIGN LAYER
+   Loaded after components.css. Quieter header, one grouped stats strip,
+   lighter patient cards, a tidier profile footer and sentence-case labels.
+   Uses the existing semantic tokens only, so light and dark stay in step.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Header: compact bar, icon-only actions on phones
+   -------------------------------------------------------------------------- */
+.header-inner {
+  min-height: 48px;
+  padding: 6px var(--space-md);
+}
+
+.app-title {
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.header-actions {
+  gap: var(--space-xs);
+}
+
+@media (max-width: 899px) {
+  .header-pill-btn,
+  .header-icon-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+    border-radius: var(--radius-full);
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+  }
+
+  /* The label stays in the DOM for screen readers and tests */
+  .header-pill-btn span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Stats: one grouped strip instead of four boxes
+   -------------------------------------------------------------------------- */
+.ios-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  padding: 4px 0;
+  margin-bottom: var(--space-md);
+  background-color: var(--color-bg-secondary);
+  border: 0.5px solid var(--color-separator);
+  border-radius: var(--radius-lg);
+}
+
+.ios-summary-card {
+  position: relative;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.ios-summary-card:hover {
+  transform: none;
+}
+
+.ios-summary-card + .ios-summary-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 0.5px;
+  background-color: var(--color-separator);
+}
+
+.ios-summary-val {
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ios-summary-lbl {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.25;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* --------------------------------------------------------------------------
+   Patient cards: lighter, no duplicated action row (the menu has them all)
+   -------------------------------------------------------------------------- */
+.record-card {
+  padding: 14px var(--space-md);
+  gap: 6px;
+  box-shadow: none;
+}
+
+.record-card:hover {
+  border-color: var(--color-separator);
+  transform: none;
+}
+
+@media (hover: hover) {
+  .record-card:hover {
+    border-color: var(--color-separator-opaque);
+  }
+}
+
+.record-card:active {
+  background-color: var(--color-bg-tertiary);
+  transform: none;
+}
+
+.record-card.is-deactivated {
+  border-style: dashed;
+}
+
+.btn-card-menu {
+  width: 36px;
+  height: 36px;
+  margin: -6px -8px -6px 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  color: var(--color-text-tertiary);
+}
+
+/* --------------------------------------------------------------------------
+   Patient profile footer: one clear primary action, quiet secondary ones
+   -------------------------------------------------------------------------- */
+.profile-footer-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-lg) calc(var(--space-sm) + var(--sab));
+}
+
+.profile-footer-actions .footer-left-actions,
+.profile-footer-actions .footer-right-actions {
+  display: contents !important;
+}
+
+.profile-footer-actions #btn-edit-record {
+  grid-column: 1 / -1;
+  order: 1;
+  min-height: 48px;
+}
+
+.profile-footer-actions #btn-toggle-deactivate {
+  order: 2;
+}
+
+.profile-footer-actions #btn-delete-record {
+  order: 3;
+  background-color: var(--color-destructive-bg);
+  color: var(--color-destructive);
+}
+
+.profile-footer-actions #btn-toggle-deactivate,
+.profile-footer-actions #btn-delete-record {
+  min-height: 44px;
+  width: 100%;
+  white-space: nowrap;
+}
+
+/* The header already has a close button, and tapping outside closes the sheet */
+.profile-footer-actions [data-action="close"] {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Labels: sentence case, untracked
+   -------------------------------------------------------------------------- */
+.brand-badge,
+.card-tca-label,
+.card-blood-label,
+.tca-header-title,
+.profile-section-title,
+.sort-dropdown-title,
+.patient-status-inactive-badge,
+.appointment-status-badge,
+.msg-section-header,
+.msg-section-title {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* --------------------------------------------------------------------------
+   Toast: a banner at the top so it never covers the sheet actions or the
+   add button, and it follows the theme tokens in light and dark
+   -------------------------------------------------------------------------- */
+.toast-container {
+  top: calc(var(--sat) + var(--space-sm));
+  bottom: auto;
+  z-index: 400;
+  background-color: var(--color-sheet-bg-solid);
+  color: var(--color-text-primary);
+  border: 0.5px solid var(--color-separator);
+  box-shadow: var(--shadow-sheet);
+  transform: translateX(-50%) translateY(-12px);
+}
+
+.toast-container.is-visible {
+  transform: translateX(-50%) translateY(0);
+}
+
+.toast-container {
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Light theme accent: system blue is 3.6:1 as text on the grey page and 4.0:1
+   behind white button text, under the 4.5:1 AA target. This is the same hue,
+   one step darker. Dark mode keeps its own accent.
+   -------------------------------------------------------------------------- */
+:root:not([data-theme="dark"]) {
+  --color-accent: #0062CC;
+  --color-accent-hover: #004FA3;
+  --color-input-focus: #0062CC;
+}
 
 

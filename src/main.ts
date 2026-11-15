@@ -1,6 +1,7 @@
 import './styles/theme.css';
 import './styles/main.css';
 import './styles/components.css';
+import './styles/redesign.css';
 
 import type {
   PatientRecord,

@@ -139,7 +139,7 @@ export class SettingsModal {
         <div class="gdrive-status-card" style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
           <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
             <div>
-              <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--color-text-secondary); letter-spacing: 0.03em;">Backup Status</div>
+              <div style="font-size: 13px; font-weight: 600; color: var(--color-text-secondary);">Backup Status</div>
               <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
                 <span id="gdrive-status-dot" class="status-dot"></span>
                 <span id="gdrive-status-label" style="font-size: 16px; font-weight: 700;">${status}</span>

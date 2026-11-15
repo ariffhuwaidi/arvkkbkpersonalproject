@@ -1628,7 +1628,6 @@ body.modal-open {
 /* Deactivated record styling */
 .record-card.is-deactivated {
   opacity: 0.75;
-  border-left: 3px solid var(--color-separator-opaque);
 }
 .patient-status-inactive-badge {
   font-size: 11px;
@@ -1864,7 +1863,6 @@ body.modal-open {
 /* Deactivated record styling */
 .record-card.is-deactivated {
   opacity: 0.75;
-  border-left: 3px solid var(--color-separator-opaque);
 }
 .patient-status-inactive-badge {
   font-size: 11px;

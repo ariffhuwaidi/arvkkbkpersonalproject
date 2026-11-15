@@ -167,29 +167,7 @@ export function createRecordCard(
 
     ${planPreviewHtml}
 
-    <div class="card-direct-actions">
-      <button type="button" class="card-action-btn btn-action-view" data-card-action="view">View</button>
-      <button type="button" class="card-action-btn btn-action-edit" data-card-action="edit">Edit</button>
-      <button type="button" class="card-action-btn btn-action-deactivate" data-card-action="toggle-active">
-        ${record.isActive === false ? 'Reactivate' : 'Deactivate'}
-      </button>
-      <button type="button" class="card-action-btn btn-action-delete" data-card-action="delete" title="Delete Patient Record">
-        Delete
-      </button>
-    </div>
   `;
-
-  // Direct action buttons
-  card.querySelectorAll('[data-card-action]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const action = btn.getAttribute('data-card-action');
-      if (action === 'view') actions.onView();
-      else if (action === 'edit') actions.onEdit();
-      else if (action === 'toggle-active') actions.onToggleActive(record.isActive === false);
-      else if (action === 'delete') actions.onDelete();
-    });
-  });
 
   // Action menu dropdown trigger
   const menuBtn = card.querySelector('.btn-card-menu') as HTMLButtonElement;

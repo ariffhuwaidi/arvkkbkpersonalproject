@@ -44,7 +44,6 @@ export function createHeader(callbacks: HeaderCallbacks): HTMLElement {
       <div class="brand-group">
         <div class="brand-title-wrap">
           <h1 class="app-title">ARV KKBK</h1>
-          <span class="brand-badge">Personal</span>
         </div>
 
         <!-- Desktop Segmented Navigation (>= 900px) -->
