@@ -28,109 +28,203 @@ export class MessageGenerator {
 
           render()       {
     this.containerEl.innerHTML = `
-      <div class="msg-gen-header">
-        <h3 class="msg-gen-title">Message Generator</h3>
-        <p class="msg-gen-desc">Create ready-to-send patient messages for WhatsApp and SMS.</p>
-      </div>
-
-      <!-- Template Selection Pills -->
-      <div class="msg-template-chips" role="radiogroup" aria-label="Select Message Template">
-        <button type="button" class="template-chip is-active" data-tpl="blood_collection">Blood Collection</button>
-        <button type="button" class="template-chip" data-tpl="tca_reschedule">TCA Rescheduling</button>
-        <button type="button" class="template-chip" data-tpl="tca_reminder">TCA Reminder</button>
-        <button type="button" class="template-chip" data-tpl="missed_appointment">Missed Appointment</button>
-        <button type="button" class="template-chip" data-tpl="general_followup">General Follow-up</button>
-        <button type="button" class="template-chip" data-tpl="custom">Custom Message</button>
-      </div>
-
-      <!-- Tone Selection -->
-      <div class="msg-tone-section">
-        <label class="form-label" style="margin-bottom: 6px;">Message Tone</label>
-        <div class="segmented-control" id="msg-tone-control" role="radiogroup">
-          <button type="button" class="segment-btn is-active" data-tone="polite">Polite</button>
-          <button type="button" class="segment-btn" data-tone="friendly">Friendly</button>
-          <button type="button" class="segment-btn" data-tone="formal">Formal</button>
+      <!-- Section 1: Message Configuration (iOS Inset Group) -->
+      <section class="msg-card-section" aria-label="Message Configuration">
+        <div class="msg-section-header">
+          <span class="msg-section-title">Message Configuration</span>
+          <span class="msg-section-subtitle">Type & Tone</span>
         </div>
-      </div>
 
-      <!-- Dynamic Form Fields -->
-      <div class="msg-inputs-form" id="msg-inputs-form"></div>
+        <div class="msg-form-grid">
+          <div class="msg-field-group">
+            <label class="msg-field-label" for="msg-select-template">
+              <span>Message Type</span>
+            </label>
+            <div class="select-wrapper">
+              <select id="msg-select-template" class="form-select ios-select" aria-label="Select Message Type">
+                <option value="blood_collection">Blood Collection Appointment</option>
+                <option value="tca_reschedule">TCA Rescheduling</option>
+                <option value="tca_reminder">TCA Reminder</option>
+                <option value="missed_appointment">Missed Appointment Follow-up</option>
+                <option value="general_followup">General Follow-up</option>
+                <option value="custom">Custom Message</option>
+              </select>
+              <span class="select-chevron" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </span>
+            </div>
+          </div>
 
-      <!-- Message Preview & Edit Area -->
-      <div class="msg-preview-card">
-        <div class="msg-preview-head">
-          <span class="preview-badge">Live Message Preview</span>
-          <span style="font-size: 11.5px; color: var(--color-text-tertiary);">Directly editable below</span>
+          <div class="msg-field-group">
+            <label class="msg-field-label">
+              <span>Message Tone</span>
+            </label>
+            <div class="segmented-control" id="msg-tone-control" role="radiogroup" aria-label="Message Tone">
+              <button type="button" class="segment-btn ${this.currentInputs.tone === 'polite' ? 'is-active' : ''}" data-tone="polite" role="radio" aria-checked="${this.currentInputs.tone === 'polite'}">Polite</button>
+              <button type="button" class="segment-btn ${this.currentInputs.tone === 'friendly' ? 'is-active' : ''}" data-tone="friendly" role="radio" aria-checked="${this.currentInputs.tone === 'friendly'}">Friendly</button>
+              <button type="button" class="segment-btn ${this.currentInputs.tone === 'formal' ? 'is-active' : ''}" data-tone="formal" role="radio" aria-checked="${this.currentInputs.tone === 'formal'}">Formal</button>
+            </div>
+          </div>
         </div>
-        <textarea id="msg-preview-text" class="msg-preview-textarea" rows="10" aria-label="Generated Message Preview"></textarea>
+      </section>
 
-        <div class="msg-preview-actions">
-          <button type="button" id="btn-msg-copy" class="btn-primary btn-msg-action">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-            <span>Copy Message</span>
-          </button>
-
-          <button type="button" id="btn-msg-whatsapp" class="btn-whatsapp btn-msg-action">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-            </svg>
-            <span>Open WhatsApp</span>
-          </button>
-
-          <button type="button" id="btn-msg-reset" class="btn-secondary btn-msg-action" style="font-weight: 500;">
-            Reset
-          </button>
+      <!-- Section 2: Patient Details (Optional, Clean Layout) -->
+      <section class="msg-card-section" aria-label="Patient Details">
+        <div class="msg-section-header">
+          <span class="msg-section-title">Patient Details</span>
+          <span class="msg-section-subtitle">Personalization</span>
         </div>
-      </div>
 
-      <!-- Privacy Notice -->
+        <div class="msg-form-grid msg-form-grid-2">
+          <div class="msg-field-group">
+            <label class="msg-field-label" for="msg-inp-name">
+              <span>Patient Name</span>
+              <span class="msg-field-optional">(Optional)</span>
+            </label>
+            <input
+              type="text"
+              id="msg-inp-name"
+              class="form-input"
+              placeholder="e.g. Encik Ahmad"
+              value="${this.currentInputs.patientName || ''}"
+              autocomplete="name"
+            />
+          </div>
+
+          <div class="msg-field-group">
+            <label class="msg-field-label" for="msg-inp-phone">
+              <span>WhatsApp / Phone</span>
+              <span class="msg-field-optional">(Optional)</span>
+            </label>
+            <input
+              type="tel"
+              id="msg-inp-phone"
+              class="form-input"
+              placeholder="e.g. 012-345 6789"
+              value="${this.currentInputs.phone || ''}"
+              autocomplete="tel"
+            />
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Appointment / Clinical Details (Dynamic Fields) -->
+      <section class="msg-card-section" id="msg-appointment-section" aria-label="Appointment Details">
+        <div class="msg-section-header">
+          <span class="msg-section-title" id="msg-apt-section-title">Appointment Details</span>
+          <span class="msg-section-subtitle">Specifics</span>
+        </div>
+        <div id="msg-dynamic-fields" class="msg-form-grid"></div>
+      </section>
+
+      <!-- Section 4: Message Preview & Actions (Full Width Textarea) -->
+      <section class="msg-card-section" aria-label="Message Preview">
+        <div class="msg-section-header">
+          <span class="msg-section-title">Message Preview</span>
+          <span class="msg-section-subtitle" style="color: var(--color-accent); font-weight: 500;">Directly Editable</span>
+        </div>
+
+        <div class="msg-preview-container">
+          <textarea
+            id="msg-preview-text"
+            class="msg-preview-textarea"
+            rows="10"
+            aria-label="Generated Patient Message"
+            placeholder="Generated message will appear here..."
+          ></textarea>
+
+          <div class="msg-actions-grid">
+            <button type="button" id="btn-msg-copy" class="btn-primary btn-msg-copy">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>Copy Message</span>
+            </button>
+
+            <button type="button" id="btn-msg-whatsapp" class="btn-whatsapp btn-msg-whatsapp">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+              </svg>
+              <span>Open WhatsApp</span>
+            </button>
+
+            <button type="button" id="btn-msg-reset" class="btn-secondary btn-msg-reset">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+              <span>Reset</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 5: Clinical Privacy Notice -->
       <div class="msg-privacy-notice">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
           <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>
-        <span>
-          <strong>Patient Privacy Safeguard:</strong> Messages are generated 100% locally on this device without external AI. Never include HIV status, diagnosis, or sensitive medication regimens in patient messages.
-        </span>
+        <div>
+          <strong>Patient Privacy Safeguard:</strong> Messages are generated 100% locally on your device without external AI or third-party servers. Never mention HIV status, diagnosis, or sensitive medication regimens in patient communications.
+        </div>
       </div>
     `;
 
     this.bindEvents();
-    this.renderInputs();
+    this.renderDynamicFields();
     this.updatePreview();
   }
 
           bindEvents()       {
-    // Template selection
-    this.containerEl.querySelectorAll('.template-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        this.containerEl.querySelectorAll('.template-chip').forEach(c => c.classList.remove('is-active'));
-        chip.classList.add('is-active');
-        const tpl = chip.getAttribute('data-tpl')                       ;
-        this.currentInputs.templateType = tpl;
-        this.renderInputs();
+    // 1. Message Type Dropdown
+    const selectEl = this.containerEl.querySelector('#msg-select-template')                     ;
+    if (selectEl) {
+      selectEl.value = this.currentInputs.templateType;
+      selectEl.addEventListener('change', () => {
+        this.currentInputs.templateType = selectEl.value                       ;
+        this.renderDynamicFields();
         this.updatePreview();
       });
-    });
+    }
 
-    // Tone selection
+    // 2. Message Tone Segmented Control
     const toneCtrl = this.containerEl.querySelector('#msg-tone-control');
     if (toneCtrl) {
       toneCtrl.addEventListener('click', (e) => {
         const btn = (e.target               ).closest('.segment-btn')                     ;
         if (!btn) return;
-        toneCtrl.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('is-active'));
+        toneCtrl.querySelectorAll('.segment-btn').forEach(b => {
+          b.classList.remove('is-active');
+          b.setAttribute('aria-checked', 'false');
+        });
         btn.classList.add('is-active');
-        const tone = btn.getAttribute('data-tone')               ;
-        this.currentInputs.tone = tone;
+        btn.setAttribute('aria-checked', 'true');
+        this.currentInputs.tone = btn.getAttribute('data-tone')               ;
         this.updatePreview();
       });
     }
 
-    // Copy message button
+    // 3. Patient Details input listeners
+    const nameInput = this.containerEl.querySelector('#msg-inp-name')                    ;
+    if (nameInput) {
+      nameInput.addEventListener('input', () => {
+        this.currentInputs.patientName = nameInput.value;
+        this.updatePreview();
+      });
+    }
+
+    const phoneInput = this.containerEl.querySelector('#msg-inp-phone')                    ;
+    if (phoneInput) {
+      phoneInput.addEventListener('input', () => {
+        this.currentInputs.phone = phoneInput.value;
+      });
+    }
+
+    // 4. Copy Message Action
     const copyBtn = this.containerEl.querySelector('#btn-msg-copy');
     if (copyBtn) {
       copyBtn.addEventListener('click', async () => {
@@ -148,7 +242,7 @@ export class MessageGenerator {
       });
     }
 
-    // Open WhatsApp button (pre-fills message, does NOT auto-send)
+    // 5. Open WhatsApp Action
     const waBtn = this.containerEl.querySelector('#btn-msg-whatsapp');
     if (waBtn) {
       waBtn.addEventListener('click', () => {
@@ -164,13 +258,12 @@ export class MessageGenerator {
         if (formattedPhone) {
           window.open(`https://wa.me/${formattedPhone}?text=${encodedMsg}`, '_blank');
         } else {
-          // Open WhatsApp web without specific phone so user can choose recipient
           window.open(`https://api.whatsapp.com/send?text=${encodedMsg}`, '_blank');
         }
       });
     }
 
-    // Reset button
+    // 6. Reset Action
     const resetBtn = this.containerEl.querySelector('#btn-msg-reset');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
@@ -179,123 +272,161 @@ export class MessageGenerator {
         this.currentInputs.scheduledDate = '';
         this.currentInputs.oldDate = '';
         this.currentInputs.newDate = '';
+        this.currentInputs.time = this.currentInputs.templateType === 'blood_collection' ? 'Sebelum 8.30 pagi' : '8.30 pagi';
         this.currentInputs.reason = 'keperluan klinikal';
         this.currentInputs.subject = '';
         this.currentInputs.instructions = '';
         this.currentInputs.customContent = '';
-        this.renderInputs();
+
+        const nameInp = this.containerEl.querySelector('#msg-inp-name')                    ;
+        if (nameInp) nameInp.value = '';
+        const phoneInp = this.containerEl.querySelector('#msg-inp-phone')                    ;
+        if (phoneInp) phoneInp.value = '';
+
+        this.renderDynamicFields();
         this.updatePreview();
-        toast.show('Fields reset to default');
+        toast.show('Message fields reset');
       });
     }
   }
 
-          renderInputs()       {
-    const form = this.containerEl.querySelector('#msg-inputs-form')               ;
-    if (!form) return;
+  /**
+   * Renders only fields relevant to the selected message type.
+   */
+          renderDynamicFields()       {
+    const fieldsContainer = this.containerEl.querySelector('#msg-dynamic-fields')               ;
+    const titleEl = this.containerEl.querySelector('#msg-apt-section-title')               ;
+    if (!fieldsContainer) return;
 
     const tpl = this.currentInputs.templateType;
 
-    let html = `
-      <div class="form-row-2">
-        <div class="form-group">
-          <label class="form-label" for="msg-inp-name">Patient Name (Optional)</label>
-          <input type="text" id="msg-inp-name" class="form-input" placeholder="e.g. Encik Ahmad" value="${this.currentInputs.patientName || ''}" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="msg-inp-phone">Phone Number (Optional)</label>
-          <input type="tel" id="msg-inp-phone" class="form-input" placeholder="e.g. 012-345 6789" value="${this.currentInputs.phone || ''}" />
-        </div>
-      </div>
-    `;
-
     if (tpl === 'blood_collection') {
-      html += `
-        <div class="form-row-2">
-          <div class="form-group">
-            <label class="form-label required" for="msg-inp-date">Blood Collection Date</label>
+      if (titleEl) titleEl.textContent = 'Blood Collection Details';
+      fieldsContainer.className = 'msg-form-grid msg-form-grid-2';
+      fieldsContainer.innerHTML = `
+        <div class="msg-field-group">
+          <label class="msg-field-label" for="msg-inp-date">
+            <span>Blood Collection Date</span>
+          </label>
+          <div class="date-input-container">
             <input type="date" id="msg-inp-date" class="form-input" value="${this.currentInputs.scheduledDate || ''}" />
           </div>
-          <div class="form-group">
-            <label class="form-label" for="msg-inp-time">Time</label>
-            <input type="text" id="msg-inp-time" class="form-input" value="${this.currentInputs.time || 'Sebelum 8.30 pagi'}" />
-          </div>
+        </div>
+        <div class="msg-field-group">
+          <label class="msg-field-label" for="msg-inp-time">
+            <span>Arrival Time</span>
+          </label>
+          <input type="text" id="msg-inp-time" class="form-input" value="${this.currentInputs.time || 'Sebelum 8.30 pagi'}" placeholder="e.g. Sebelum 8.30 pagi" />
         </div>
       `;
     } else if (tpl === 'tca_reschedule') {
-      html += `
-        <div class="form-row-2">
-          <div class="form-group">
-            <label class="form-label required" for="msg-inp-old-date">Original Appointment Date</label>
-            <input type="date" id="msg-inp-old-date" class="form-input" value="${this.currentInputs.oldDate || ''}" />
+      if (titleEl) titleEl.textContent = 'TCA Rescheduling Details';
+      fieldsContainer.className = 'msg-form-grid';
+      fieldsContainer.innerHTML = `
+        <div class="msg-form-grid msg-form-grid-2" style="margin-bottom: 0;">
+          <div class="msg-field-group">
+            <label class="msg-field-label" for="msg-inp-old-date">
+              <span>Original TCA Date</span>
+            </label>
+            <div class="date-input-container">
+              <input type="date" id="msg-inp-old-date" class="form-input" value="${this.currentInputs.oldDate || ''}" />
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label required" for="msg-inp-new-date">New Appointment Date</label>
-            <input type="date" id="msg-inp-new-date" class="form-input" value="${this.currentInputs.newDate || ''}" />
+          <div class="msg-field-group">
+            <label class="msg-field-label" for="msg-inp-new-date">
+              <span>New TCA Date</span>
+            </label>
+            <div class="date-input-container">
+              <input type="date" id="msg-inp-new-date" class="form-input" value="${this.currentInputs.newDate || ''}" />
+            </div>
           </div>
         </div>
-        <div class="form-row-2">
-          <div class="form-group">
-            <label class="form-label" for="msg-inp-time">Time</label>
-            <input type="text" id="msg-inp-time" class="form-input" value="${this.currentInputs.time || '8.30 pagi'}" />
+
+        <div class="msg-form-grid msg-form-grid-2">
+          <div class="msg-field-group">
+            <label class="msg-field-label" for="msg-inp-time">
+              <span>Time</span>
+            </label>
+            <input type="text" id="msg-inp-time" class="form-input" value="${this.currentInputs.time || '8.30 pagi'}" placeholder="e.g. 8.30 pagi" />
           </div>
-          <div class="form-group">
-            <label class="form-label" for="msg-inp-reason">Reason for Rescheduling</label>
-            <input type="text" id="msg-inp-reason" class="form-input" placeholder="e.g. pertukaran jadual klinik / cuti umum" value="${this.currentInputs.reason || 'keperluan klinikal'}" />
+          <div class="msg-field-group">
+            <label class="msg-field-label" for="msg-inp-reason">
+              <span>Reason for Rescheduling</span>
+            </label>
+            <input type="text" id="msg-inp-reason" class="form-input" placeholder="e.g. keperluan klinikal / cuti umum" value="${this.currentInputs.reason || 'keperluan klinikal'}" />
           </div>
         </div>
       `;
     } else if (tpl === 'tca_reminder') {
-      html += `
-        <div class="form-row-2">
-          <div class="form-group">
-            <label class="form-label required" for="msg-inp-date">TCA Appointment Date</label>
+      if (titleEl) titleEl.textContent = 'TCA Reminder Details';
+      fieldsContainer.className = 'msg-form-grid msg-form-grid-2';
+      fieldsContainer.innerHTML = `
+        <div class="msg-field-group">
+          <label class="msg-field-label" for="msg-inp-date">
+            <span>TCA Appointment Date</span>
+          </label>
+          <div class="date-input-container">
             <input type="date" id="msg-inp-date" class="form-input" value="${this.currentInputs.scheduledDate || ''}" />
           </div>
-          <div class="form-group">
-            <label class="form-label" for="msg-inp-time">Time</label>
-            <input type="text" id="msg-inp-time" class="form-input" value="${this.currentInputs.time || '8.30 pagi'}" />
-          </div>
+        </div>
+        <div class="msg-field-group">
+          <label class="msg-field-label" for="msg-inp-time">
+            <span>Appointment Time</span>
+          </label>
+          <input type="text" id="msg-inp-time" class="form-input" value="${this.currentInputs.time || '8.30 pagi'}" placeholder="e.g. 8.30 pagi" />
         </div>
       `;
     } else if (tpl === 'missed_appointment') {
-      html += `
-        <div class="form-group">
-          <label class="form-label required" for="msg-inp-date">Missed Appointment Date</label>
-          <input type="date" id="msg-inp-date" class="form-input" value="${this.currentInputs.scheduledDate || ''}" />
+      if (titleEl) titleEl.textContent = 'Missed Appointment Details';
+      fieldsContainer.className = 'msg-form-grid';
+      fieldsContainer.innerHTML = `
+        <div class="msg-field-group">
+          <label class="msg-field-label" for="msg-inp-date">
+            <span>Missed Appointment Date</span>
+          </label>
+          <div class="date-input-container">
+            <input type="date" id="msg-inp-date" class="form-input" value="${this.currentInputs.scheduledDate || ''}" />
+          </div>
         </div>
       `;
     } else if (tpl === 'general_followup') {
-      html += `
-        <div class="form-group">
-          <label class="form-label" for="msg-inp-subject">Subject</label>
+      if (titleEl) titleEl.textContent = 'General Follow-up Details';
+      fieldsContainer.className = 'msg-form-grid';
+      fieldsContainer.innerHTML = `
+        <div class="msg-field-group">
+          <label class="msg-field-label" for="msg-inp-subject">
+            <span>Subject</span>
+            <span class="msg-field-optional">(Optional)</span>
+          </label>
           <input type="text" id="msg-inp-subject" class="form-input" placeholder="e.g. Susulan Pengambilan Ubat" value="${this.currentInputs.subject || ''}" />
         </div>
-        <div class="form-group">
-          <label class="form-label" for="msg-inp-instr">Instructions / Message Details</label>
+        <div class="msg-field-group">
+          <label class="msg-field-label" for="msg-inp-instr">
+            <span>Instructions / Content</span>
+          </label>
           <textarea id="msg-inp-instr" class="form-textarea" rows="3" placeholder="Sila hadir ke kaunter farmasi...">${this.currentInputs.instructions || ''}</textarea>
         </div>
       `;
     } else if (tpl === 'custom') {
-      html += `
-        <div class="form-group">
-          <label class="form-label" for="msg-inp-custom">Custom Message Content</label>
+      if (titleEl) titleEl.textContent = 'Custom Message Content';
+      fieldsContainer.className = 'msg-form-grid';
+      fieldsContainer.innerHTML = `
+        <div class="msg-field-group">
+          <label class="msg-field-label" for="msg-inp-custom">
+            <span>Message Content</span>
+          </label>
           <textarea id="msg-inp-custom" class="form-textarea" rows="4" placeholder="Tulis mesej klinikal di sini...">${this.currentInputs.customContent || ''}</textarea>
         </div>
       `;
     }
 
-    form.innerHTML = html;
+    // Bind event listeners to newly inserted input elements
+    fieldsContainer.querySelectorAll('input, textarea').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const id = inp.id;
+        const val = (inp                                          ).value;
 
-    // Attach listeners to input elements
-    form.querySelectorAll('input, textarea').forEach(input => {
-      input.addEventListener('input', () => {
-        const id = input.id;
-        const val = (input                                          ).value;
-
-        if (id === 'msg-inp-name') this.currentInputs.patientName = val;
-        else if (id === 'msg-inp-phone') this.currentInputs.phone = val;
-        else if (id === 'msg-inp-date') this.currentInputs.scheduledDate = val;
+        if (id === 'msg-inp-date') this.currentInputs.scheduledDate = val;
         else if (id === 'msg-inp-old-date') this.currentInputs.oldDate = val;
         else if (id === 'msg-inp-new-date') this.currentInputs.newDate = val;
         else if (id === 'msg-inp-time') this.currentInputs.time = val;
@@ -338,7 +469,7 @@ export class MessageGenerator {
         if (tone === 'formal') {
           return `${salutation}\n\nDengan segala hormatnya dimaklumkan bahawa pihak Klinik Kesihatan Bandar Kulim menetapkan temujanji pengambilan darah bagi pihak tuan/puan mengikut ketetapan berikut:\n\nTarikh: ${formattedDate}\nMasa: ${formattedTime}\nLokasi: Klinik Kesihatan Bandar Kulim\n\nSehubungan dengan itu, tuan/puan dipohon hadir sebelum jam 8.30 pagi bagi melancarkan prosedur klinikal berkenaan.\n\nKerjasama tuan/puan amat dihargai. Sekian, terima kasih.\n\n${signature}`;
         }
-        // Polite (Default specified in prompt)
+        // Polite (Default)
         return `${salutation}\n\nDimaklumkan bahawa pihak Klinik Kesihatan Bandar Kulim ingin memaklumkan kepada tuan/puan mengenai pengambilan darah pada:\n\nTarikh: ${formattedDate}\nMasa: ${formattedTime}\nLokasi: Klinik Kesihatan Bandar Kulim\n\nMohon tuan/puan hadir sebelum jam 8.30 pagi bagi melancarkan urusan pengambilan darah.\n\nTerima kasih atas kerjasama tuan/puan.\n\n${signature}`;
 
       case 'tca_reschedule':
@@ -348,7 +479,7 @@ export class MessageGenerator {
         if (tone === 'formal') {
           return `${salutation}\n\nAdalah dimaklumkan bahawa temujanji tuan/puan di Klinik Kesihatan Bandar Kulim yang dijadualkan pada ${formattedOldDate} terpaksa dipinda atas sebab ${formattedReason}.\n\nKetetapan tarikh temujanji baharu adalah seperti berikut:\nTarikh: ${formattedNewDate}\nMasa: ${formattedTime}\n\nTuan/puan dipohon membuat pengesahan kehadiran. Segala kesulitan yang timbul amatlah dikesali.\n\nSekian, terima kasih.\n\n${signature}`;
         }
-        // Polite (Prompt standard)
+        // Polite (Default)
         return `${salutation}\n\nDimaklumkan bahawa temujanji tuan/puan di Klinik Kesihatan Bandar Kulim pada ${formattedOldDate} perlu dijadualkan semula kerana ${formattedReason}.\n\nTarikh temujanji baharu: ${formattedNewDate}\nMasa: ${formattedTime}\n\nMohon pengesahan dan kerjasama daripada pihak tuan/puan.\n\nSegala kesulitan amat dikesali.\n\nTerima kasih.\n\n${signature}`;
 
       case 'tca_reminder':
@@ -358,7 +489,7 @@ export class MessageGenerator {
         if (tone === 'formal') {
           return `${salutation}\n\nPihak Klinik Kesihatan Bandar Kulim ingin mengingatkan tuan/puan berkenaan temujanji rawatan susulan yang dijadualkan seperti berikut:\n\nTarikh: ${formattedDate}\nMasa: ${formattedTime}\n\nTuan/puan dimohon hadir mengikut ketetapan yang ditetapkan demi kelancaran rawatan.\n\nSekian, terima kasih.\n\n${signature}`;
         }
-        // Polite (Prompt standard)
+        // Polite (Default)
         return `${salutation}\n\nIni merupakan peringatan mesra berkenaan temujanji tuan/puan di Klinik Kesihatan Bandar Kulim.\n\nTarikh: ${formattedDate}\nMasa: ${formattedTime}\n\nMohon hadir mengikut tarikh dan masa yang telah ditetapkan.\n\nTerima kasih.\n\n${signature}`;
 
       case 'missed_appointment':
@@ -368,7 +499,7 @@ export class MessageGenerator {
         if (tone === 'formal') {
           return `${salutation}\n\nMerujuk kepada rekod klinikal, tuan/puan didapati tidak dapat hadir pada temujanji yang dijadualkan pada ${formattedDate}.\n\nPihak Klinik Kesihatan Bandar Kulim memohon maklum balas pihak tuan/puan bagi urusan penjadualan semula temujanji pada kadar segera.\n\nPerhatian dan kerjasama tuan/puan amat dihargai. Sekian, terima kasih.\n\n${signature}`;
         }
-        // Polite (Prompt standard)
+        // Polite (Default)
         return `${salutation}\n\nPihak Klinik Kesihatan Bandar Kulim ingin membuat susulan berkenaan temujanji tuan/puan pada ${formattedDate}.\n\nKami ingin mengetahui sama ada tuan/puan berkesempatan untuk hadir bagi penjadualan semula temujanji.\n\nMohon maklum balas daripada pihak tuan/puan.\n\nTerima kasih.\n\n${signature}`;
 
       case 'general_followup':

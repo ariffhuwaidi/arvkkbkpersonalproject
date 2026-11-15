@@ -42,6 +42,7 @@
    -------------------------------------------------------------------------- */
 :root,
 [data-theme="light"] {
+  color-scheme: light;
   --color-bg-primary: #F2F2F7;
   --color-bg-secondary: #FFFFFF;
   --color-bg-tertiary: #E5E5EA;
@@ -96,6 +97,7 @@
    Deep charcoal background, slightly elevated cards, refined system blue
    -------------------------------------------------------------------------- */
 [data-theme="dark"] {
+  color-scheme: dark;
   --color-bg-primary: #000000;
   --color-bg-secondary: #1C1C1E;
   --color-bg-tertiary: #2C2C2E;

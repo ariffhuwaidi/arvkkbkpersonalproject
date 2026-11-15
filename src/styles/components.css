@@ -2350,3 +2350,259 @@ body.modal-open {
   letter-spacing: 0.02em;
 }
 
+/* ==========================================================================
+   MESSAGE GENERATOR (iOS-INSPIRED GROUPED INSET LAYOUT)
+   ========================================================================== */
+
+.message-generator-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Grouped Inset Section Card */
+.msg-card-section {
+  background-color: var(--color-bg-secondary);
+  border: 0.5px solid var(--color-separator);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.msg-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid var(--color-separator);
+  margin-bottom: 2px;
+}
+
+.msg-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
+.msg-section-subtitle {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  font-weight: 500;
+}
+
+/* Compact Dropdown Selector */
+.select-wrapper {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-select.ios-select {
+  width: 100%;
+  height: 44px;
+  padding: 10px 38px 10px 14px;
+  font-size: 16px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  background-color: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-select.ios-select:focus {
+  border-color: var(--color-input-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
+}
+
+.select-chevron {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+}
+
+/* Full Width Form Controls on Mobile */
+.msg-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 580px) {
+  .msg-form-grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.msg-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.msg-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.msg-field-optional {
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
+  font-weight: 400;
+}
+
+/* Message Preview Card & 100% Width Textarea */
+.msg-preview-container {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.msg-preview-textarea {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  min-height: 220px !important;
+  font-family: inherit;
+  font-size: 16px !important;
+  line-height: 1.55 !important;
+  padding: 14px 16px !important;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-input-border);
+  background-color: var(--color-input-bg);
+  color: var(--color-text-primary);
+  caret-color: var(--color-accent);
+  resize: vertical;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.msg-preview-textarea:focus {
+  border-color: var(--color-input-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
+}
+
+.msg-preview-textarea::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+/* Action Buttons Grid */
+.msg-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+}
+
+@media (min-width: 520px) {
+  .msg-actions-grid {
+    grid-template-columns: 1fr 1fr auto;
+  }
+}
+
+.btn-msg-copy,
+.btn-msg-whatsapp,
+.btn-msg-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.btn-msg-whatsapp {
+  background-color: #25D366;
+  color: #FFFFFF;
+  border: none;
+}
+
+.btn-msg-whatsapp:hover {
+  background-color: #20BD5A;
+}
+
+/* Clinical Privacy Notice Banner */
+.msg-privacy-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-secondary);
+  border: 0.5px solid var(--color-separator);
+  border-left: 3.5px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* Dark mode overrides for inputs, dropdowns, and textareas */
+[data-theme="dark"] .msg-card-section {
+  background-color: var(--color-bg-secondary);
+  border-color: var(--color-separator);
+}
+
+[data-theme="dark"] .form-select.ios-select,
+[data-theme="dark"] .msg-preview-textarea,
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-textarea {
+  background-color: var(--color-input-bg) !important;
+  border-color: var(--color-input-border) !important;
+  color: var(--color-text-primary) !important;
+  caret-color: var(--color-accent) !important;
+}
+
+[data-theme="dark"] .form-select.ios-select option {
+  background-color: #1C1C1E;
+  color: #FFFFFF;
+}
+
+[data-theme="dark"] .msg-preview-textarea::placeholder,
+[data-theme="dark"] .form-input::placeholder,
+[data-theme="dark"] .form-textarea::placeholder {
+  color: var(--color-text-placeholder) !important;
+}
+
