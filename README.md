@@ -69,29 +69,23 @@ Because ARV KKBK does not connect to any cloud server or database:
 
 ## Publishing & Deployment Options
 
-The application is completely static (no build step or backend required on the server). You can publish either the **root folder** or the self-contained `dist/` directory.
+The app is built with Vite into a static `dist/` folder (no backend). `dist/` is generated, not committed.
 
-### Option A: GitHub Pages (Free, Recommended for personal use)
-1. Initialize or push this repository to GitHub (set to **Private** if you want repository visibility restricted).
-2. Go to **Settings** > **Pages**.
-3. Under **Build and deployment**:
-   - Source: **Deploy from a branch**
-   - Branch: `main` (or `master`), Folder: `/ (root)` or `/dist`.
-4. Click **Save**. Your app will be live at `https://<username>.github.io/<repo-name>/`.
+### Option A: GitHub Pages (current setup)
+Every push to `main` runs `.github/workflows/deploy.yml`, which type-checks, runs the tests, builds with Vite and publishes `dist/`. A failing test stops the deploy. The site path is set by `base` in `vite.config.ts`.
 
 ### Option B: Cloudflare Pages / Netlify / Vercel
-1. Upload or link the repository.
-2. Build command: *(leave empty or use `npm run compile`)*.
-3. Publish directory: `dist` or `.`.
-4. Deploy!
+1. Link the repository.
+2. Build command: `npm run build`. Publish directory: `dist`.
+3. Change `base` in `vite.config.ts` to `/` if the site is served from the domain root.
 
-### Option C: Instant Local / Clinic Network Serving
-To run privately on your local laptop or clinic Wi-Fi without uploading to the internet:
+### Option C: Local / clinic network only
+To run privately without uploading anything:
 ```bash
-# In the arv-kkbk directory:
-python -m http.server 8080
-# Access from iPhone on the same Wi-Fi: https://<laptop-ip>:8080
+npm run build
+npm run preview -- --host
 ```
+Then open the address it prints (the path includes the `base` from `vite.config.ts`).
 
 ---
 
@@ -113,11 +107,14 @@ python -m http.server 8080
 
 ## Running Locally
 
-### Building / Compiling
 ```bash
-# Compile and package production dist/ folder:
-node scripts/build.js
+npm install        # once
+npm run dev        # live-reloading dev server
+npm test           # type check + all tests + production build
+npm run test:watch # re-run tests on every save
 ```
+
+Tests live in `tests/` and use Vitest. Storage tests run the real IndexedDB code against an in-memory database (fake-indexeddb); UI tests render components in a simulated page (jsdom). Static files (icons, manifest, service worker) live in `public/`.
 
 ## Programs, tabs and security
 
@@ -125,5 +122,5 @@ node scripts/build.js
 - **Three tabs.** Records, TCA (called Review in MMT) and More. More holds the Message Generator, Google Drive, Local Data, Security, Recently Deleted and About.
 - **MMT records:** current dose and dose history, a daily dose log (dispensed or missed), take-home supplies, urine tests, and reviews. Patients are listed under "Needs follow-up" after 3 days of missed doses or an overdue review. Both numbers are constants at the top of `src/utils/mmt.ts`.
 - **Security:** optional PIN lock with auto-lock, encrypted Drive backups and exports (passphrase, AES-256-GCM), Recently Deleted for 30 days, and Sync Now to merge changes from another device (newest edit per patient wins).
-- **Tests:** `npm test` compiles and runs every check. Generated files (`app.bundle.*`, `dist_js`, `live_preview.html`) are not committed.
+- **Tests:** `npm test` type-checks, runs every test and builds. The build output (`dist/`) is not committed.
 - Backups and exports contain patient data. Do not commit them to a public repository.

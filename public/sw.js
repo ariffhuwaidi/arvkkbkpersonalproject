@@ -4,14 +4,13 @@
  * NEVER intercepts or caches any patient record data (which lives exclusively in IndexedDB).
  */
 
-const CACHE_NAME = 'arv-kkbk-v5';
+const CACHE_NAME = 'arv-kkbk-v6';
 
-// Assets to pre-cache on install
+// App shell pre-cached on install. The hashed JS and CSS files that Vite
+// builds into ./assets/ are cached the first time they load (see fetch below).
 const PRECACHE_URLS = [
   './',
   './index.html',
-  './app.bundle.js',
-  './app.bundle.css',
   './manifest.webmanifest',
   './favicon.svg',
   './apple-touch-icon.png',

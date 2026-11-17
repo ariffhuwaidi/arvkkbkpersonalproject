@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 
 export default defineConfig({
@@ -11,5 +12,10 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false
+  },
+  test: {
+    include: ['tests/**/*.test.ts'],
+    environment: 'node',
+    setupFiles: ['tests/setup.ts']
   }
 });

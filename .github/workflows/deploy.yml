@@ -38,8 +38,8 @@ jobs:
             npm install
           fi
 
-      - name: Build with Vite
-        run: npm run build
+      - name: Type check, test and build
+        run: npm test
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
