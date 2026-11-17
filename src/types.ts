@@ -129,6 +129,7 @@ export interface PatientRecord {
   programs?: ProgramId[]; // Programs this person is enrolled in (defaults to ['ARV'])
   mmt?: MMTProfile; // MMT enrolment data, present when programs includes 'MMT'
   deletedAt?: string; // Set when moved to Recently Deleted (ISO timestamp)
+  purged?: boolean; // Deleted forever: details erased, only a blank marker kept so other devices delete too
 
   // Denormalized/helper fields pointing to current/next active appointment for list/search
   nextTca?: string; // ISO format: YYYY-MM-DD

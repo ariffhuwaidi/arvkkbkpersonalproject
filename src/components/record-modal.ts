@@ -1,5 +1,6 @@
 import { BLOOD_INVESTIGATION_OPTIONS } from '../types';
-import type { PatientRecord, PatientType } from '../types';
+import type { PatientRecord, PatientType, ProgramId } from '../types';
+import { inProgram } from '../utils/mmt';
 import { getOneMonthBeforeISO } from '../utils/date';
 import { normalizeCode } from '../utils/search';
 import { confirmSheet } from './confirm-sheet';
@@ -16,6 +17,8 @@ export class RecordModal {
   private overlayEl: HTMLElement;
   private currentRecord: PatientRecord | null = null;
   private savedRecords: PatientRecord[] = [];
+  /** Patients in Recently Deleted; used only to stop duplicate registrations. */
+  private deletedRecords: PatientRecord[] = [];
   private isEditMode = false;
   private isBloodDateManuallyEdited = false;
   private onSaveCallback: ((record: Omit<PatientRecord, 'createdAt' | 'updatedAt'> & { createdAt?: string; updatedAt?: string }) => Promise<void>) | null = null;
@@ -552,14 +555,34 @@ export class RecordModal {
     const trimmedIc = icInput.value.trim();
     const normalizedNewIc = normalizeCode(trimmedIc);
 
-    // Duplicate IC check when saving a new patient (unless updating selected existing patient)
+    // Duplicate IC check when saving a new patient: one person should stay one record.
     const isNew = !this.currentRecord;
+    let joinExisting: PatientRecord | null = null;
     if (isNew) {
-      const existingMatch = this.savedRecords.find(
-        r => normalizeCode(r.icNumber) === normalizedNewIc
+      const existingMatch = [...this.savedRecords, ...this.deletedRecords].find(
+        r => !r.purged && normalizeCode(r.icNumber) === normalizedNewIc
       );
 
-      if (existingMatch) {
+      if (existingMatch && existingMatch.deletedAt) {
+        const proceed = await confirmSheet.show({
+          title: 'Patient is in Recently Deleted',
+          message: `IC "${trimmedIc}" belongs to "${existingMatch.name}", who is in Recently Deleted.\n\nRestore them from More > Recently Deleted to keep one record with their full history.`,
+          confirmLabel: 'Save as New Anyway',
+          cancelLabel: 'Cancel',
+          isDestructive: false
+        });
+        if (!proceed) { icInput.focus(); return; }
+      } else if (existingMatch && !inProgram(existingMatch, 'ARV')) {
+        const join = await confirmSheet.show({
+          title: 'Already registered in MMT',
+          message: `IC "${trimmedIc}" belongs to "${existingMatch.name}" in the MMT program.\n\nAdd them to ARV as well? They stay one record and their MMT data is kept.`,
+          confirmLabel: 'Add to ARV',
+          cancelLabel: 'Cancel',
+          isDestructive: false
+        });
+        if (!join) { icInput.focus(); return; }
+        joinExisting = existingMatch;
+      } else if (existingMatch) {
         const shouldProceed = await confirmSheet.show({
           title: 'Duplicate IC Warning',
           message: `A patient with IC "${trimmedIc}" already exists as "${existingMatch.name}". Are you sure you want to proceed with registering this record?`,
@@ -582,11 +605,12 @@ export class RecordModal {
     try {
       if (this.onSaveCallback) {
         await this.onSaveCallback({
-          id: this.currentRecord ? this.currentRecord.id : '',
+          id: this.currentRecord ? this.currentRecord.id : (joinExisting ? joinExisting.id : ''),
           name: nameInput.value.trim(),
           icNumber: trimmedIc,
-          phone: phoneInput.value.trim() || undefined,
+          phone: phoneInput.value.trim() || joinExisting?.phone || undefined,
           patientType,
+          ...(joinExisting ? { programs: ['ARV', 'MMT'] as ProgramId[] } : {}),
           isActive: this.currentRecord?.isActive !== undefined ? this.currentRecord.isActive : true,
           appointments: this.currentRecord?.appointments,
           nextTca: tcaInput.value || undefined,
@@ -594,7 +618,7 @@ export class RecordModal {
           bloodInvestigations: selectedInvs,
           bloodOther: selectedInvs.includes('Other') && otherInput.value.trim() ? otherInput.value.trim() : undefined,
           plan: planInput.value.trim() || undefined,
-          createdAt: this.currentRecord?.createdAt
+          createdAt: this.currentRecord?.createdAt ?? joinExisting?.createdAt
         });
       }
       this.close();
@@ -608,10 +632,12 @@ export class RecordModal {
     record: PatientRecord | null,
     savedRecords: PatientRecord[],
     onSave: (record: Omit<PatientRecord, 'createdAt' | 'updatedAt'> & { createdAt?: string; updatedAt?: string }) => Promise<void>,
-    triggerEl?: HTMLElement
+    triggerEl?: HTMLElement,
+    deletedRecords: PatientRecord[] = []
   ): void {
     this.currentRecord = record;
     this.savedRecords = savedRecords;
+    this.deletedRecords = deletedRecords;
     this.isEditMode = Boolean(record);
     this.onSaveCallback = onSave;
     this.previousActiveElement = triggerEl || (document.activeElement as HTMLElement);

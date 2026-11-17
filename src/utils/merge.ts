@@ -14,6 +14,36 @@ export function unionPrograms(a?: ProgramId[], b?: ProgramId[]): ProgramId[] {
   return (['ARV', 'MMT'] as ProgramId[]).filter(p => set.has(p));
 }
 
+/**
+ * A blank marker for a patient deleted forever. It keeps only what other
+ * devices need to match and delete the same person (id and IC number) and is
+ * removed for good once DELETE_RETENTION_DAYS have passed since deletedAt.
+ */
+export function toTombstone(record: PatientRecord, updatedAt: string): PatientRecord {
+  return {
+    id: record.id,
+    name: 'Deleted patient',
+    icNumber: record.icNumber,
+    patientType: 'Existing',
+    isActive: false,
+    programs: record.programs && record.programs.length ? record.programs : ['ARV'],
+    appointments: [],
+    bloodCollections: [],
+    bloodInvestigations: [],
+    purged: true,
+    deletedAt: record.deletedAt || updatedAt,
+    createdAt: record.createdAt,
+    updatedAt
+  };
+}
+
+/** A live or recently deleted record with the same IC number. Erased markers are ignored. */
+export function findByIC(records: PatientRecord[], ic: string): PatientRecord | undefined {
+  const key = normalizeIC(ic);
+  if (!key) return undefined;
+  return records.find(r => !r.purged && normalizeIC(r.icNumber) === key);
+}
+
 export function isExpiredTombstone(record: PatientRecord, now: number = Date.now()): boolean {
   if (!record.deletedAt) return false;
   const deletedMs = Date.parse(record.deletedAt);
@@ -88,8 +118,8 @@ export function planMerge(local: PatientRecord[], incoming: PatientRecord[], now
     };
 
     const mmt = mmtStamp(inc) > mmtStamp(match) ? inc.mmt : match.mmt;
-    if (mmt) merged.mmt = mmt;
-    else delete merged.mmt;
+    if (mmt && !merged.purged) merged.mmt = mmt;
+    else delete merged.mmt; // a deleted-forever marker never picks MMT data back up
 
     const changed = JSON.stringify(merged) !== JSON.stringify(match);
     if (!changed) {

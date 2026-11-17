@@ -2,6 +2,7 @@ import { BLOOD_INVESTIGATION_OPTIONS } from '../types';
 import type { PatientRecord, PatientType, TCAAppointment, AppointmentStatus, ProgramId } from '../types';
 import { encryptJSON } from './crypto';
 import { sanitizeMMT } from './mmt';
+import { toTombstone } from './merge';
 
 export const CURRENT_SCHEMA_VERSION = 6;
 
@@ -44,15 +45,22 @@ export function stripToScope(record: PatientRecord, scope: ExportScope): Patient
   return copy;
 }
 
+/**
+ * In an "Everything" export, deleted patients travel only as blank markers
+ * (id, IC, deletion time) so importing the file on another device deletes them
+ * there too, without putting their details in the file. totalRecords counts
+ * live patients only.
+ */
 export function buildExportPayload(records: PatientRecord[], scope: ExportScope = 'all'): ExportDataPayload {
-  const chosen = selectRecordsForScope(records, scope).map(r => stripToScope(r, scope));
+  const chosen = selectRecordsForScope(records, scope)
+    .map(r => (r.deletedAt ? toTombstone(r, r.updatedAt) : stripToScope(r, scope)));
   return {
     app: 'ARV_KKBK',
     version: '6.0',
     schemaVersion: 6,
     exportedAt: new Date().toISOString(),
     scope,
-    totalRecords: chosen.length,
+    totalRecords: chosen.filter(r => !r.deletedAt).length,
     records: chosen
   };
 }
@@ -295,6 +303,7 @@ function extraFields(r: Record<string, unknown>): Partial<PatientRecord> {
   if (mmt) extra.mmt = mmt;
   if (typeof r.deletedAt === 'string' && r.deletedAt) {
     extra.deletedAt = r.deletedAt;
+    if (r.purged === true) extra.purged = true;
   }
   return extra;
 }

@@ -44,6 +44,7 @@ import type { MMTEnrolData } from './components/mmt-enrol-modal';
 import { createMMTCard } from './components/mmt-card';
 import { renderMMTReviewView } from './components/mmt-view';
 import { inProgram, newMMTProfile, doseStatusOn, followUpReasons, urineDue, programsOf } from './utils/mmt';
+import { findByIC } from './utils/merge';
 import { getLocalTodayISO } from './utils/date';
 
 const PROGRAM_KEY = 'arv_kkbk_program';
@@ -101,7 +102,8 @@ class App {
         await this.reloadFromStorage();
       },
       onPurgeDeleted: async (id) => {
-        await recordStorage.delete(id);
+        await recordStorage.purge(id);
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
       },
       onLockNow: () => this.lockScreen.lock()
     });
@@ -318,12 +320,14 @@ class App {
     document.body.setAttribute('data-program', this.program);
   }
 
-  private openAddPatient(): void {
+  private async openAddPatient(): Promise<void> {
     if (this.program === 'MMT') {
       const candidates = this.records.filter(r => !inProgram(r, 'MMT'));
       this.mmtEnrolModal.open(candidates, (data) => this.handleEnrolMMT(data));
     } else {
-      this.recordModal.open(null, this.records, (rec) => this.handleSaveRecord(rec));
+      // Recently Deleted is included so re-registering someone points to Restore instead of a duplicate.
+      const deleted = await recordStorage.listDeleted();
+      this.recordModal.open(null, this.records, (rec) => this.handleSaveRecord(rec), undefined, deleted);
     }
   }
 
@@ -725,9 +729,9 @@ class App {
         this.updateRecordInState(saved);
         toast.show(`${saved.name} added to MMT`);
       } else {
-        const digits = (v: string) => v.replace(/\D/g, '');
-        const dup = this.records.find(r => digits(r.icNumber) === digits(data.icNumber));
+        const dup = findByIC([...this.records, ...(await recordStorage.listDeleted())], data.icNumber);
         if (dup) {
+          if (dup.deletedAt) return `${dup.name} is in Recently Deleted. Restore them from More > Recently Deleted, then add them to MMT.`;
           return inProgram(dup, 'MMT')
             ? `${dup.name} is already in MMT.`
             : `${dup.name} is already registered (ARV). Choose them from the list above to add them to MMT.`;

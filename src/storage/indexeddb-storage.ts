@@ -7,7 +7,7 @@ import type {
   BloodCollectionStatus,
   ProgramId
 } from '../types';
-import { planMerge, isExpiredTombstone } from '../utils/merge';
+import { planMerge, isExpiredTombstone, toTombstone } from '../utils/merge';
 import { sanitizeMMT } from '../utils/mmt';
 
 const DB_NAME = 'arv_kkbk_db';
@@ -146,11 +146,11 @@ export class IndexedDBStorage implements IRecordStorage {
     return all.filter(r => !r.deletedAt);
   }
 
-  /** Records moved to Recently Deleted, newest deletion first. */
+  /** Records in Recently Deleted (restorable), newest deletion first. */
   async listDeleted(): Promise<PatientRecord[]> {
     const all = await this.listAll();
     return all
-      .filter(r => !!r.deletedAt)
+      .filter(r => !!r.deletedAt && !r.purged)
       .sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''));
   }
 
@@ -550,6 +550,7 @@ export class IndexedDBStorage implements IRecordStorage {
       programs: this.normalizePrograms(raw.programs),
       ...(raw.mmt && typeof raw.mmt === 'object' ? { mmt: sanitizeMMT(raw.mmt) } : {}),
       ...(typeof raw.deletedAt === 'string' && raw.deletedAt ? { deletedAt: raw.deletedAt } : {}),
+      ...(raw.purged === true && raw.deletedAt ? { purged: true } : {}),
       createdAt: raw.createdAt || new Date().toISOString(),
       updatedAt: raw.updatedAt || new Date().toISOString()
     };
@@ -579,10 +580,21 @@ export class IndexedDBStorage implements IRecordStorage {
     return updated;
   }
 
-  /** Permanently removes deleted records older than the retention period. */
+  /**
+   * Delete forever: erases the patient's details now and keeps a blank marker
+   * (see toTombstone) until the retention period ends, so a sync deletes them
+   * on other devices instead of bringing them back.
+   */
+  async purge(id: string): Promise<void> {
+    const rec = await this.get(id);
+    if (!rec) return;
+    await this.putRaw(toTombstone(rec, new Date().toISOString()));
+  }
+
+  /** Permanently removes deleted records and markers older than the retention period. */
   async purgeExpiredDeleted(): Promise<number> {
-    const deleted = await this.listDeleted();
-    const expired = deleted.filter(r => isExpiredTombstone(r));
+    const all = await this.listAll();
+    const expired = all.filter(r => isExpiredTombstone(r));
     for (const rec of expired) await this.delete(rec.id);
     return expired.length;
   }

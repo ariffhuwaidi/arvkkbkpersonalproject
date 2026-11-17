@@ -884,7 +884,7 @@ export class SettingsModal {
         const name = btn.getAttribute('data-name') || 'this patient';
         const sure = await confirmSheet.show({
           title: 'Delete permanently?',
-          message: `"${name}" and all of their history will be erased now. This cannot be undone.`,
+          message: `"${name}" and all of their history will be erased now. This cannot be undone.\n\nOnly their IC number is kept, for up to ${DELETE_RETENTION_DAYS} days, so your other devices delete them too on their next sync.`,
           confirmLabel: 'Delete Permanently',
           cancelLabel: 'Keep',
           isDestructive: true
