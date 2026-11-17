@@ -617,6 +617,11 @@ export class IndexedDBStorage implements IRecordStorage {
     return { added: plan.added, updated: plan.updated, unchanged: plan.unchanged, skipped: plan.skipped };
   }
 
+  /** Writes a record exactly as given (used for program changes and undo). */
+  async put(record: PatientRecord): Promise<void> {
+    await this.putRaw(record);
+  }
+
   private async putRaw(record: PatientRecord): Promise<void> {
     const db = await this.getDB();
     await new Promise<void>((resolve, reject) => {

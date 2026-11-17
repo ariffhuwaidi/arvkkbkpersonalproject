@@ -205,9 +205,9 @@ runTest('4.2 Message Generator is inside Settings / More modal as a dedicated ta
   assert(settingsModalContent.includes('Message Generator'), 'Missing Message Generator tab in Settings / More');
   assert(settingsModalContent.includes('Google Drive'), 'Missing Google Drive tab in Settings / More');
   assert(settingsModalContent.includes('Local Data'), 'Missing Local Data tab in Settings / More');
-  assert(settingsModalContent.includes('data-set-tab="message_gen"'), 'Missing message_gen tab button');
-  assert(settingsModalContent.includes('data-set-tab="gdrive"'), 'Missing gdrive tab button');
-  assert(settingsModalContent.includes('data-set-tab="local_data"'), 'Missing local_data tab button');
+  assert(settingsModalContent.includes("row('message_gen'"), 'Missing message_gen row');
+  assert(settingsModalContent.includes("row('gdrive'"), 'Missing gdrive row');
+  assert(settingsModalContent.includes("row('local_data'"), 'Missing local_data row');
 });
 
 // -------------------------------------------------------------
@@ -222,9 +222,12 @@ runTest('5.1 Bottom Navigation retains exactly 2 tabs (Records and TCA) without 
   assert(!navBarContent.includes('data-tab="settings"'), 'Bottom navigation must NOT contain settings tab');
 });
 
-runTest('5.2 Header button renamed to "Settings / More" and opens settings modal', () => {
-  const headerContent = fs.readFileSync(path.join(rootDir, 'src', 'components', 'header.ts'), 'utf-8');
-  assert(headerContent.includes('Settings / More'), 'Header button must say Settings / More');
+runTest('5.2 Settings live under a dedicated "More" tab (third tab)', () => {
+  const navContent = fs.readFileSync(path.join(rootDir, 'src', 'components', 'nav-bar.ts'), 'utf-8');
+  assert(navContent.includes('data-tab="more"') && navContent.includes('>More<'), 'Nav bar must have a More tab');
+  const tabs = (navContent.match(/data-tab="(records|tca|more)"/g) || []).length;
+  assert(tabs >= 3, 'Nav bar must have exactly the Records, TCA and More tabs');
+  assert(!/data-tab="(?!records|tca|more)/.test(navContent), 'No other bottom tabs');
 });
 
 runTest('5.3 Details modal contains Sections A (TCA), B (TCA History), C (Blood), D (Blood History) & Lab Routing', () => {

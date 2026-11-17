@@ -50,7 +50,6 @@ export class SettingsModal {
   private messageGenerator: MessageGenerator;
   private getRecordsCallback: (() => Promise<PatientRecord[]>) | null = null;
   private onImportCallback: ((records: PatientRecord[], mode: 'merge' | 'replace') => Promise<void>) | null = null;
-  private previousActiveElement: HTMLElement | null = null;
   private handlers: SettingsHandlers | null = null;
   private pinMode: 'set' | 'change' | 'remove' | null = null;
 
@@ -62,60 +61,47 @@ export class SettingsModal {
     this.messageGenerator = new MessageGenerator();
 
     this.overlayEl = document.createElement('div');
-    this.overlayEl.className = 'modal-overlay';
-    this.overlayEl.setAttribute('role', 'dialog');
-    this.overlayEl.setAttribute('aria-modal', 'true');
-    this.overlayEl.setAttribute('aria-label', 'Settings and Utilities');
+    this.overlayEl.className = 'settings-page';
+    this.overlayEl.setAttribute('aria-label', 'Settings');
+
+    const chevron = '<svg class="settings-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+    const row = (id: SettingsTab, title: string, sub: string) => `
+      <button type="button" class="settings-row" data-set-tab="${id}">
+        <span class="settings-row-text"><span class="settings-row-title">${title}</span><span class="settings-row-sub">${sub}</span></span>
+        ${chevron}
+      </button>`;
 
     this.overlayEl.innerHTML = `
-      <div class="bottom-sheet settings-sheet" style="max-width: 680px; max-height: 90vh;">
-        <div class="sheet-grab-bar"></div>
-        <div class="sheet-header">
-          <div>
-            <span class="sheet-title">Settings / More</span>
-            <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">
-              Clinical Utilities & Data Management
-            </div>
+      <div class="settings-shell">
+        <section class="settings-home" id="settings-home">
+          <h2 class="settings-page-title">More</h2>
+          <div class="settings-list">
+            ${row('message_gen', 'Message Generator', 'Appointment reminders in Bahasa Melayu')}
+            ${row('gdrive', 'Google Drive', 'Backups and Sync Now')}
+            ${row('local_data', 'Local Data', 'Export files or load a backup file')}
+            ${row('security', 'Security', 'PIN lock and backup encryption')}
+            ${row('deleted', 'Recently Deleted', 'Restore patients for 30 days')}
+            ${row('about', 'About', 'Privacy and data notes')}
           </div>
-          <button type="button" class="btn-icon" data-action="close" aria-label="Close settings">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
+        </section>
 
-        <!-- Top Segmented Navigation -->
-        <div class="settings-nav-bar" style="padding: 0 20px 10px 20px;">
-          <div class="segmented-control settings-seg-ctrl" role="tablist">
-            <button type="button" class="segment-btn is-active" data-set-tab="message_gen">Message Generator</button>
-            <button type="button" class="segment-btn" data-set-tab="gdrive">Google Drive</button>
-            <button type="button" class="segment-btn" data-set-tab="local_data">Local Data</button>
-            <button type="button" class="segment-btn" data-set-tab="security">Security</button>
-            <button type="button" class="segment-btn" data-set-tab="deleted">Recently Deleted</button>
-            <button type="button" class="segment-btn" data-set-tab="about">About</button>
+        <section class="settings-detail" id="settings-detail" hidden>
+          <div class="settings-detail-head">
+            <button type="button" class="settings-back" data-action="back" aria-label="Back to More">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              <span>More</span>
+            </button>
+            <h2 class="settings-detail-title" id="settings-detail-title"></h2>
           </div>
-        </div>
-
-        <div class="sheet-body settings-body" id="settings-content" style="padding-top: 8px;">
-          <!-- Tab 1: Message Generator (Default) -->
-          <div id="tab-pane-message_gen" class="settings-tab-pane"></div>
-
-          <!-- Tab 2: Google Drive Backup -->
-          <div id="tab-pane-gdrive" class="settings-tab-pane" style="display: none;"></div>
-
-          <!-- Tab 3: Local Data Backup -->
-          <div id="tab-pane-local_data" class="settings-tab-pane" style="display: none;"></div>
-
-          <!-- Tab 4: Security -->
-          <div id="tab-pane-security" class="settings-tab-pane" style="display: none;"></div>
-
-          <!-- Tab 5: Recently Deleted -->
-          <div id="tab-pane-deleted" class="settings-tab-pane" style="display: none;"></div>
-
-          <!-- Tab 6: About & Privacy -->
-          <div id="tab-pane-about" class="settings-tab-pane" style="display: none;"></div>
-        </div>
+          <div class="settings-body" id="settings-content">
+            <div id="tab-pane-message_gen" class="settings-tab-pane"></div>
+            <div id="tab-pane-gdrive" class="settings-tab-pane" style="display: none;"></div>
+            <div id="tab-pane-local_data" class="settings-tab-pane" style="display: none;"></div>
+            <div id="tab-pane-security" class="settings-tab-pane" style="display: none;"></div>
+            <div id="tab-pane-deleted" class="settings-tab-pane" style="display: none;"></div>
+            <div id="tab-pane-about" class="settings-tab-pane" style="display: none;"></div>
+          </div>
+        </section>
       </div>
     `;
 
@@ -136,24 +122,14 @@ export class SettingsModal {
   private bindEvents(): void {
     this.overlayEl.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      if (target === this.overlayEl || target.closest('[data-action="close"]')) {
-        this.close();
+      if (target.closest('[data-action="back"]')) {
+        this.showHome();
+        return;
       }
-    });
-
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isOpen()) {
-        this.close();
+      const rowBtn = target.closest('.settings-row') as HTMLElement | null;
+      if (rowBtn) {
+        this.switchTab(rowBtn.getAttribute('data-set-tab') as SettingsTab);
       }
-    });
-
-    // Top Segment Switching
-    const segContainer = this.overlayEl.querySelector('.settings-seg-ctrl') as HTMLElement;
-    segContainer.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('.segment-btn') as HTMLButtonElement;
-      if (!btn) return;
-      const targetTab = btn.getAttribute('data-set-tab') as SettingsTab;
-      this.switchTab(targetTab);
     });
 
     // Listen to Google Drive Service status changes
@@ -162,13 +138,27 @@ export class SettingsModal {
     });
   }
 
+  private static TITLES: Record<SettingsTab, string> = {
+    message_gen: 'Message Generator',
+    gdrive: 'Google Drive',
+    local_data: 'Local Data',
+    security: 'Security',
+    deleted: 'Recently Deleted',
+    about: 'About'
+  };
+
+  public showHome(): void {
+    (this.overlayEl.querySelector('#settings-home') as HTMLElement).hidden = false;
+    (this.overlayEl.querySelector('#settings-detail') as HTMLElement).hidden = true;
+    this.overlayEl.scrollTop = 0;
+  }
+
   public switchTab(tab: SettingsTab): void {
     this.activeTab = tab;
-    const segContainer = this.overlayEl.querySelector('.settings-seg-ctrl') as HTMLElement;
-    segContainer.querySelectorAll('.segment-btn').forEach(btn => {
-      const isMatch = btn.getAttribute('data-set-tab') === tab;
-      btn.classList.toggle('is-active', isMatch);
-    });
+    (this.overlayEl.querySelector('#settings-home') as HTMLElement).hidden = true;
+    (this.overlayEl.querySelector('#settings-detail') as HTMLElement).hidden = false;
+    (this.overlayEl.querySelector('#settings-detail-title') as HTMLElement).textContent = SettingsModal.TITLES[tab];
+    this.overlayEl.scrollTop = 0;
 
     this.overlayEl.querySelectorAll('.settings-tab-pane').forEach((pane: any) => {
       pane.style.display = pane.id === `tab-pane-${tab}` ? 'block' : 'none';
@@ -532,7 +522,7 @@ export class SettingsModal {
       </div>
     `;
 
-    // Wire local export/import
+    // Wire the local export and file-load buttons
     const exportBtn = pane.querySelector('#btn-export-local-json') as HTMLButtonElement;
     const importBtn = pane.querySelector('#btn-trigger-local-import') as HTMLButtonElement;
     const fileInput = pane.querySelector('#local-file-import-input') as HTMLInputElement;
@@ -633,7 +623,7 @@ export class SettingsModal {
   private refreshLocalDataHint(): void {
     const hint = this.overlayEl.querySelector('#local-data-hint') as HTMLElement | null;
     if (!hint) return;
-    hint.textContent = 'Older ARV-only backups import as ARV patients. Encrypted files ask for their passphrase.';
+    hint.textContent = 'Older ARV-only backups load as ARV patients. Encrypted files ask for their passphrase.';
   }
 
   // ---------------------------------------------------------------- Security
@@ -935,29 +925,25 @@ export class SettingsModal {
     `;
   }
 
+  /** Shows the settings page (the More tab). Call switchTab afterwards to jump to a section. */
   public open(
     getRecords: () => Promise<PatientRecord[]>,
-    onImport: (records: PatientRecord[], mode: 'merge' | 'replace') => Promise<void>,
-    initialTab: SettingsTab = 'message_gen',
-    triggerEl?: HTMLElement
+    onImport: (records: PatientRecord[], mode: 'merge' | 'replace') => Promise<void>
   ): void {
     this.getRecordsCallback = getRecords;
     this.onImportCallback = onImport;
-    this.previousActiveElement = triggerEl || (document.activeElement as HTMLElement);
-
-    this.switchTab(initialTab);
-    document.body.classList.add('modal-open');
+    if (!this.isOpen()) this.showHome();
     this.overlayEl.classList.add('is-open');
   }
 
+  /** Leaves the current section and returns to the list. The page itself stays on the More tab. */
   public close(): void {
-    if (!this.isOpen()) return;
-    document.body.classList.remove('modal-open');
-    this.overlayEl.classList.remove('is-open');
+    this.showHome();
+  }
 
-    if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
-      this.previousActiveElement.focus();
-    }
+  /** Hides the page when another tab is chosen. */
+  public hide(): void {
+    this.overlayEl.classList.remove('is-open');
   }
 
   public isOpen(): boolean {

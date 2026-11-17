@@ -11,7 +11,9 @@ import type {
   PatientType,
   TCAAppointment,
   AppointmentStatus,
-  BloodCollectionAppointment
+  BloodCollectionAppointment,
+  ProgramId,
+  MMTProfile
 } from './types';
 import { recordStorage } from './storage/indexeddb-storage';
 import { themeManager } from './utils/theme';
@@ -35,6 +37,18 @@ import { confirmSheet } from './components/confirm-sheet';
 import { toast } from './components/toast';
 import { NavigationBar, getSavedTab } from './components/nav-bar';
 import { renderTCAView } from './components/tca-view';
+import { MMTModal } from './components/mmt-modal';
+import { MMTEnrolModal } from './components/mmt-enrol-modal';
+import type { MMTEnrolData } from './components/mmt-enrol-modal';
+import { createMMTCard } from './components/mmt-card';
+import { renderMMTReviewView } from './components/mmt-view';
+import { inProgram, newMMTProfile, doseStatusOn, followUpReasons, urineDue, programsOf } from './utils/mmt';
+import { getLocalTodayISO } from './utils/date';
+
+const PROGRAM_KEY = 'arv_kkbk_program';
+function getSavedProgram(): ProgramId {
+  try { return localStorage.getItem(PROGRAM_KEY) === 'MMT' ? 'MMT' : 'ARV'; } catch { return 'ARV'; }
+}
 
 class App {
   private records: PatientRecord[] = [];
@@ -44,6 +58,9 @@ class App {
   private activeTab: ActiveTab = getSavedTab();
 
   private lockScreen!: LockScreen;
+  private program: ProgramId = getSavedProgram();
+  private mmtModal!: MMTModal;
+  private mmtEnrolModal!: MMTEnrolModal;
   private navBar!: NavigationBar;
   private recordModal!: RecordModal;
   private detailsModal!: DetailsModal;
@@ -72,6 +89,8 @@ class App {
     this.recordModal = new RecordModal();
     this.detailsModal = new DetailsModal();
     this.sortSheet = new SortSheet();
+    this.mmtModal = new MMTModal();
+    this.mmtEnrolModal = new MMTEnrolModal();
     this.settingsModal = new SettingsModal();
     this.settingsModal.configure({
       onSync: () => this.syncWithDrive(),
@@ -97,6 +116,8 @@ class App {
     // 4. Render base DOM structure
     this.renderLayout();
 
+    this.applyProgramLabels();
+
     // 5. Load records from IndexedDB (after unlock when a PIN is set)
     if (!hasPin()) void this.loadRecords();
     void this.startupHousekeeping();
@@ -115,11 +136,15 @@ class App {
     const header = createHeader({
       activeTab: this.activeTab,
       onTabSelect: (tab) => this.navBar.setActiveTab(tab),
-      onAddClick: () => this.recordModal.open(null, this.records, (rec) => this.handleSaveRecord(rec)),
-      onDataClick: () => this.settingsModal.open(
-        () => recordStorage.listAll(),
-        (recs, mode) => this.handleImportRecords(recs, mode)
-      )
+      onAddClick: () => this.openAddPatient(),
+      onThemeToggle: () => {
+        const modes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
+        const next = modes[(modes.indexOf(themeManager.getMode()) + 1) % modes.length];
+        themeManager.setTheme(next);
+        toast.show(`Theme: ${next.charAt(0).toUpperCase() + next.slice(1)}`);
+      },
+      program: this.program,
+      onProgramChange: (program) => this.setProgram(program)
     });
     appEl.appendChild(header);
 
@@ -190,7 +215,7 @@ class App {
       </svg>
     `;
     fabBtn.addEventListener('click', () => {
-      this.recordModal.open(null, this.records, (rec) => this.handleSaveRecord(rec), fabBtn);
+      this.openAddPatient();
     });
     appEl.appendChild(fabBtn);
 
@@ -274,41 +299,106 @@ class App {
     }
   }
 
+  private get scoped(): PatientRecord[] {
+    return this.records.filter(r => inProgram(r, this.program));
+  }
+
+  private setProgram(program: ProgramId): void {
+    this.program = program;
+    try { localStorage.setItem(PROGRAM_KEY, program); } catch { /* ignore */ }
+    this.applyProgramLabels();
+    this.renderCurrentView();
+  }
+
+  private applyProgramLabels(): void {
+    const label = this.program === 'MMT' ? 'Review' : 'TCA';
+    document.querySelectorAll('.tab-item[data-tab="tca"] .tab-label').forEach(el => { el.textContent = label; });
+    document.querySelectorAll('.desktop-tab-btn[data-tab="tca"]').forEach(el => { el.textContent = label; });
+    document.body.setAttribute('data-program', this.program);
+  }
+
+  private openAddPatient(): void {
+    if (this.program === 'MMT') {
+      const candidates = this.records.filter(r => !inProgram(r, 'MMT'));
+      this.mmtEnrolModal.open(candidates, (data) => this.handleEnrolMMT(data));
+    } else {
+      this.recordModal.open(null, this.records, (rec) => this.handleSaveRecord(rec));
+    }
+  }
+
   private renderCurrentView(): void {
+    // The More tab is a separate page, not a list of patients
+    const isMore = this.activeTab === 'more';
+    document.querySelector('.main-content')?.classList.toggle('is-hidden', isMore);
+    document.querySelector('.fab-add')?.toggleAttribute('hidden', isMore);
+    if (isMore) {
+      this.settingsModal.open(() => recordStorage.listAll(), (recs, mode) => this.handleImportRecords(recs, mode));
+      return;
+    }
+    this.settingsModal.hide();
+
+    const isMMT = this.program === 'MMT';
+    const scoped = this.scoped;
     const isTcaTab = this.activeTab === 'tca';
 
-    // Update Apple-style summary metrics
     this.updateSummaryMetrics();
 
-    // Requirement 2: REMOVE the All / New / Existing filter from the TCA tab only.
-    if (isTcaTab) {
+    if (isTcaTab || isMMT) {
       this.segmentedFilterEl.style.display = 'none';
       this.sortTriggerEl.style.display = 'none';
-      this.viewContainerEl.className = 'tca-view-container';
+      this.viewContainerEl.className = isTcaTab ? 'tca-view-container' : 'records-container';
     } else {
       this.segmentedFilterEl.style.display = 'flex';
       this.sortTriggerEl.style.display = 'inline-flex';
       this.viewContainerEl.className = 'records-container';
     }
 
-    // On TCA tab, patient type filter does not apply (shows all scheduled records); on Records tab, applies active filter
-    const effectiveFilter = isTcaTab ? 'all' : this.currentFilter;
-    const filtered = filterRecords(this.records, this.searchQuery, effectiveFilter);
+    const effectiveFilter = isTcaTab || isMMT ? 'all' : this.currentFilter;
+    const filtered = filterRecords(scoped, this.searchQuery, effectiveFilter);
 
-    // Update count display
-    const labelPrefix = isTcaTab ? 'appointments' : 'records';
-    if (this.records.length === 0) {
+    const labelPrefix = isTcaTab ? (isMMT ? 'patients' : 'appointments') : 'records';
+    const singular = (n: number) => (n === 1 ? labelPrefix.replace(/s$/, '') : labelPrefix);
+    if (scoped.length === 0) {
       this.recordCountEl.textContent = `0 ${labelPrefix}`;
-    } else if (this.searchQuery || (!isTcaTab && this.currentFilter !== 'all')) {
-      this.recordCountEl.textContent = `Showing ${filtered.length} of ${this.records.length} ${labelPrefix}`;
+    } else if (this.searchQuery || (!isTcaTab && !isMMT && this.currentFilter !== 'all')) {
+      this.recordCountEl.textContent = `Showing ${filtered.length} of ${scoped.length} ${singular(scoped.length)}`;
     } else {
-      this.recordCountEl.textContent = `${this.records.length} ${labelPrefix}`;
+      this.recordCountEl.textContent = `${scoped.length} ${singular(scoped.length)}`;
     }
 
     this.viewContainerEl.innerHTML = '';
 
+    // MMT empty state
+    if (isMMT && scoped.length === 0) {
+      const box = document.createElement('div');
+      box.className = 'empty-state';
+      box.innerHTML = `
+        <h2 class="empty-title">No MMT Patients Yet</h2>
+        <p class="empty-desc">Add a new person, or enrol someone already registered in ARV. A person in both programs stays one record.</p>
+        <button type="button" id="btn-empty-add-mmt" class="btn-demo-load">Add MMT patient</button>`;
+      box.querySelector('#btn-empty-add-mmt')!.addEventListener('click', () => this.openAddPatient());
+      this.viewContainerEl.appendChild(box);
+      return;
+    }
+
+    // MMT tabs
+    if (isMMT && filtered.length > 0) {
+      if (isTcaTab) {
+        this.viewContainerEl.appendChild(renderMMTReviewView(filtered, (r) => this.openMMTProfile(r)));
+      } else {
+        const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+        for (const record of sorted) {
+          this.viewContainerEl.appendChild(createMMTCard(record, {
+            onView: () => this.openMMTProfile(record),
+            onQuickDose: (status) => { void this.handleQuickDose(record, status); }
+          }));
+        }
+      }
+      return;
+    }
+
     // Empty state 1: Database empty -> Show "Load Demo Data"
-    if (this.records.length === 0) {
+    if (scoped.length === 0 && !isMMT) {
       const emptyBox = document.createElement('div');
       emptyBox.className = 'empty-state';
       emptyBox.innerHTML = `
@@ -450,19 +540,34 @@ class App {
   private updateSummaryMetrics(): void {
     if (!this.summaryStripEl) return;
 
-    if (this.records.length === 0) {
+    const scoped = this.scoped;
+    if (scoped.length === 0) {
       this.summaryStripEl.style.display = 'none';
       return;
     }
-
     this.summaryStripEl.style.display = 'grid';
 
-    const totalActive = this.records.filter(r => r.isActive !== false).length;
+    if (this.program === 'MMT') {
+      const today = getLocalTodayISO();
+      const active = scoped.filter(r => r.mmt && r.isActive !== false);
+      const toDispense = active.filter(r => r.mmt!.dispensing === 'Daily' && doseStatusOn(r.mmt!, today) === null).length;
+      const followUp = active.filter(r => followUpReasons(r, today).length > 0).length;
+      const urine = active.filter(r => urineDue(r.mmt!, today)).length;
+      this.summaryStripEl.innerHTML = `
+        <div class="ios-summary-card"><span class="ios-summary-val color-accent">${active.length}</span><span class="ios-summary-lbl">Active Patients</span></div>
+        <div class="ios-summary-card"><span class="ios-summary-val">${toDispense}</span><span class="ios-summary-lbl">To Dispense Today</span></div>
+        <div class="ios-summary-card"><span class="ios-summary-val ${followUp > 0 ? 'color-overdue' : ''}">${followUp}</span><span class="ios-summary-lbl">Needs Follow-up</span></div>
+        <div class="ios-summary-card"><span class="ios-summary-val">${urine}</span><span class="ios-summary-lbl">Urine Due</span></div>
+      `;
+      return;
+    }
+
+    const totalActive = scoped.filter(r => r.isActive !== false).length;
     let overdueCount = 0;
     let upcomingWeekCount = 0;
     let bloodDueCount = 0;
 
-    for (const r of this.records) {
+    for (const r of scoped) {
       if (r.isActive === false) continue;
       if (r.nextTca) {
         const diff = getDaysDifference(r.nextTca);
@@ -496,6 +601,13 @@ class App {
   }
 
   private async handleDeleteRecord(record: PatientRecord): Promise<void> {
+    // A person in both programs is only removed from the program being viewed
+    const programs = programsOf(record);
+    if (programs.length > 1) {
+      await this.removeFromProgram(record, this.program);
+      return;
+    }
+
     const aptCount = Array.isArray(record.appointments) ? record.appointments.length : (record.nextTca ? 1 : 0);
     const history = aptCount > 0 ? ` Their ${aptCount} ${aptCount === 1 ? 'appointment' : 'appointments'} and history go with them.` : '';
 
@@ -521,6 +633,124 @@ class App {
         googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
       }
     });
+  }
+
+  /** Removes a person from one program only, keeping the other. Undo puts everything back. */
+  private async removeFromProgram(record: PatientRecord, program: ProgramId): Promise<void> {
+    const other: ProgramId = program === 'ARV' ? 'MMT' : 'ARV';
+    const ok = await confirmSheet.show({
+      title: `Remove from ${program}?`,
+      message: `"${record.name}" stays in ${other}. Only their ${program} records are taken out of the ${program} list.`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Keep',
+      isDestructive: true
+    });
+    if (!ok) return;
+
+    const before: PatientRecord = JSON.parse(JSON.stringify(record));
+    // The other program's data is untouched; removing MMT also clears the MMT block
+    const update: PatientRecord = { ...record, programs: [other], updatedAt: new Date().toISOString() };
+    if (program === 'MMT') delete (update as any).mmt;
+    await recordStorage.put(update);
+    this.detailsModal.close();
+    await this.reloadFromStorage();
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    toast.show(`Removed from ${program}`, {
+      actionLabel: 'Undo',
+      onAction: async () => {
+        await recordStorage.put({ ...before, updatedAt: new Date().toISOString() });
+        await this.reloadFromStorage();
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+      }
+    });
+  }
+
+  private openMMTProfile(record: PatientRecord): void {
+    this.mmtModal.open(record, {
+      onChange: async (rec, mmt) => {
+        const saved = await recordStorage.save({ ...rec, mmt });
+        this.updateRecordInState(saved);
+        this.renderCurrentView();
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+        return saved;
+      },
+      onRemoveFromMMT: (rec) => {
+        if (programsOf(rec).length > 1) void this.removeFromProgram(rec, 'MMT');
+        else void this.handleDeleteRecord(rec);
+      }
+    });
+  }
+
+  private async handleQuickDose(record: PatientRecord, status: 'Dispensed' | 'Missed'): Promise<void> {
+    if (!record.mmt) return;
+    const today = getLocalTodayISO();
+    const mmt: MMTProfile = JSON.parse(JSON.stringify(record.mmt));
+    mmt.doseLog = mmt.doseLog.filter(e => e.date !== today);
+    mmt.doseLog.push({ date: today, status, doseMg: status === 'Dispensed' ? mmt.currentDoseMg : undefined });
+    mmt.updatedAt = new Date().toISOString();
+    const saved = await recordStorage.save({ ...record, mmt });
+    this.updateRecordInState(saved);
+    this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    toast.show(status === 'Dispensed' ? `${record.name}: dispensed` : `${record.name}: missed`, {
+      actionLabel: 'Undo',
+      onAction: async () => {
+        const undo: MMTProfile = JSON.parse(JSON.stringify(saved.mmt));
+        undo.doseLog = undo.doseLog.filter(e => e.date !== today);
+        undo.updatedAt = new Date().toISOString();
+        const again = await recordStorage.save({ ...saved, mmt: undo });
+        this.updateRecordInState(again);
+        this.renderCurrentView();
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+      }
+    });
+  }
+
+  /** Returns an error message to show in the sheet, or null on success. */
+  private async handleEnrolMMT(data: MMTEnrolData): Promise<string | null> {
+    const now = new Date().toISOString();
+    const mmt = newMMTProfile({
+      startDate: data.startDate,
+      currentDoseMg: data.doseMg,
+      dispensing: data.dispensing,
+      doseHistory: data.doseMg !== undefined ? [{ id: `dose_${Date.now().toString(36)}`, date: data.startDate, doseMg: data.doseMg, reason: 'Starting dose' }] : []
+    }, now);
+
+    try {
+      if (data.existingId) {
+        const existing = this.records.find(r => r.id === data.existingId);
+        if (!existing) return 'That patient could not be found.';
+        const saved = await recordStorage.save({ ...existing, programs: ['ARV', 'MMT'], mmt });
+        this.updateRecordInState(saved);
+        toast.show(`${saved.name} added to MMT`);
+      } else {
+        const digits = (v: string) => v.replace(/\D/g, '');
+        const dup = this.records.find(r => digits(r.icNumber) === digits(data.icNumber));
+        if (dup) {
+          return inProgram(dup, 'MMT')
+            ? `${dup.name} is already in MMT.`
+            : `${dup.name} is already registered (ARV). Choose them from the list above to add them to MMT.`;
+        }
+        const saved = await recordStorage.save({
+          id: '',
+          name: data.name,
+          icNumber: data.icNumber,
+          phone: data.phone || undefined,
+          patientType: 'Existing',
+          isActive: true,
+          bloodInvestigations: [],
+          programs: ['MMT'],
+          mmt
+        } as any);
+        this.records.unshift(saved);
+        toast.show('MMT patient added');
+      }
+    } catch (err: any) {
+      return err?.message || 'Could not save.';
+    }
+    this.renderCurrentView();
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    return null;
   }
 
   private async reloadFromStorage(): Promise<void> {
@@ -565,7 +795,8 @@ class App {
     banner.setAttribute('role', 'status');
     banner.innerHTML = `<span>${last ? `Last backup was ${Math.floor(ageDays)} days ago.` : 'This device has never been backed up.'}</span><button type="button" class="backup-banner-btn">Back up</button>`;
     banner.querySelector('button')!.addEventListener('click', () => {
-      this.settingsModal.open(() => recordStorage.listAll(), (recs, mode) => this.handleImportRecords(recs, mode), 'gdrive');
+      this.navBar.setActiveTab('more');
+      this.settingsModal.switchTab('gdrive');
     });
     main.prepend(banner);
   }

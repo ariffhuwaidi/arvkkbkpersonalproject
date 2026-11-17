@@ -73,11 +73,17 @@ const modulesInOrder = [
   'utils/theme',
   'utils/search',
   'utils/sort',
+  'utils/mmt',
+  'utils/crypto',
+  'utils/merge',
+  'utils/app-lock',
   'utils/demo-data',
   'storage/indexeddb-storage',
   'components/toast',
   'components/confirm-sheet',
   'utils/export-import',
+  'components/passphrase-sheet',
+  'utils/backup-passphrase',
   'utils/google-drive',
   'components/blood-collection-modal',
   'components/record-card',
@@ -91,6 +97,11 @@ const modulesInOrder = [
   'components/nav-bar',
   'components/tca-view',
   'components/header',
+  'components/lock-screen',
+  'components/mmt-card',
+  'components/mmt-view',
+  'components/mmt-modal',
+  'components/mmt-enrol-modal',
   'main'
 ];
 
@@ -107,6 +118,7 @@ for (const mod of modulesInOrder) {
 
   // Convert export declarations to local declarations
   code = code.replace(/export\s+class\s+(\w+)/g, 'class $1');
+  code = code.replace(/export\s+async\s+function\s+(\w+)/g, 'async function $1');
   code = code.replace(/export\s+function\s+(\w+)/g, 'function $1');
   code = code.replace(/export\s+const\s+(\w+)/g, 'const $1');
   code = code.replace(/export\s+let\s+(\w+)/g, 'let $1');

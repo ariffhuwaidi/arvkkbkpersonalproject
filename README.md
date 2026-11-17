@@ -118,3 +118,12 @@ python -m http.server 8080
 # Compile and package production dist/ folder:
 node scripts/build.js
 ```
+
+## Programs, tabs and security
+
+- **One app, two programs.** The ARV | MMT switch in the header changes the whole app. A person can be in both programs and stays one record (matched by IC number). Removing someone from one program keeps the other.
+- **Three tabs.** Records, TCA (called Review in MMT) and More. More holds the Message Generator, Google Drive, Local Data, Security, Recently Deleted and About.
+- **MMT records:** current dose and dose history, a daily dose log (dispensed or missed), take-home supplies, urine tests, and reviews. Patients are listed under "Needs follow-up" after 3 days of missed doses or an overdue review. Both numbers are constants at the top of `src/utils/mmt.ts`.
+- **Security:** optional PIN lock with auto-lock, encrypted Drive backups and exports (passphrase, AES-256-GCM), Recently Deleted for 30 days, and Sync Now to merge changes from another device (newest edit per patient wins).
+- **Tests:** `npm test` compiles and runs every check. Generated files (`app.bundle.*`, `dist_js`, `live_preview.html`) are not committed.
+- Backups and exports contain patient data. Do not commit them to a public repository.

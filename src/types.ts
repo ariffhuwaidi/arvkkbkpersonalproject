@@ -3,7 +3,7 @@ export type PatientCategory = PatientType;
 
 export type PatientTypeFilter = 'all' | 'New' | 'Existing';
 
-export type ActiveTab = 'records' | 'tca';
+export type ActiveTab = 'records' | 'tca' | 'more';
 
 export type AppointmentStatus = 'Scheduled' | 'Attended' | 'DNA' | 'Rescheduled' | 'Cancelled';
 
