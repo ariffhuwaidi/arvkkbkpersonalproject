@@ -5,6 +5,9 @@ import { NavigationBar } from '../src/components/nav-bar';
 import { createRecordCard } from '../src/components/record-card';
 import { createMMTCard } from '../src/components/mmt-card';
 import { MessageGenerator } from '../src/components/message-generator';
+import { renderSecurityPane } from '../src/components/settings/security-pane';
+import { renderDeletedPane, refreshDeletedList } from '../src/components/settings/deleted-pane';
+import { hasPin, removePin } from '../src/utils/app-lock';
 import { mmt, rec } from './helpers';
 
 afterEach(() => { document.body.innerHTML = ''; });
@@ -47,6 +50,44 @@ describe('MMT card', () => {
     const card = createMMTCard(rec({ name: '<b>x</b>', programs: ['MMT'], mmt: mmt({ currentDoseMg: 60 }) }), { onView: () => {}, onQuickDose: () => {} });
     expect(card.querySelector('b')).toBeNull();
     expect(card.textContent).toContain('60 mg');
+  });
+});
+
+describe('More > Security', () => {
+  afterEach(() => removePin());
+
+  it('refuses an easy PIN and saves a good one', async () => {
+    const pane = document.createElement('div');
+    document.body.appendChild(pane);
+    renderSecurityPane(pane, { onLockNow: () => {} });
+    pane.querySelector<HTMLButtonElement>('[data-pin-action="set"]')!.click();
+    const fill = (pin: string) => {
+      pane.querySelector<HTMLInputElement>('#pin-new')!.value = pin;
+      pane.querySelector<HTMLInputElement>('#pin-new2')!.value = pin;
+      pane.querySelector<HTMLFormElement>('#pin-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    };
+    fill('1111');
+    await vi.waitFor(() => expect(pane.querySelector('#pin-error')!.textContent).toMatch(/too easy/));
+    expect(hasPin()).toBe(false);
+    fill('2580');
+    await vi.waitFor(() => expect(hasPin()).toBe(true));
+    expect(pane.querySelector('[data-pin-action="lock"]')).not.toBeNull();
+  });
+});
+
+describe('More > Recently Deleted', () => {
+  it('lists deleted patients safely and restores one', async () => {
+    const pane = document.createElement('div');
+    document.body.appendChild(pane);
+    renderDeletedPane(pane);
+    const onRestoreDeleted = vi.fn(async () => {});
+    const people = [rec({ id: 'd1', name: '<i>Hidden</i>', deletedAt: new Date().toISOString() })];
+    await refreshDeletedList(pane, { listDeleted: async () => people, onRestoreDeleted, onPurgeDeleted: async () => {} });
+    expect(pane.querySelector('.deleted-row-name i')).toBeNull();
+    expect(pane.querySelector('.deleted-row-name')!.textContent).toBe('<i>Hidden</i>');
+    expect(pane.textContent).toContain('30 days left');
+    pane.querySelector<HTMLButtonElement>('[data-restore]')!.click();
+    await vi.waitFor(() => expect(onRestoreDeleted).toHaveBeenCalledWith('d1'));
   });
 });
 

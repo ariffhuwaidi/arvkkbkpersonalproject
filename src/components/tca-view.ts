@@ -1,14 +1,6 @@
 import type { PatientRecord, TCAGroupKey } from '../types';
 import { formatDisplayDate, getRelativeTCALabel, getTCAGroupKey } from'../utils/date';
-
-function escapeHTML(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import { escapeHtml } from '../utils/escape';
 
 export function renderTCAView(
   records: PatientRecord[],
@@ -152,18 +144,18 @@ function createTCARow(record: PatientRecord, onClick: () => void): HTMLElement {
   let investigationsLabel = '';
   if (record.bloodInvestigations && record.bloodInvestigations.length > 0) {
     const list = record.bloodInvestigations.map(i => i === 'Other' && record.bloodOther ? `Other: ${record.bloodOther}` : i);
-    investigationsLabel = `<span class="tca-blood-pill" style="color: var(--color-text-secondary);">${escapeHTML(list.join(', '))}</span>`;
+    investigationsLabel = `<span class="tca-blood-pill" style="color: var(--color-text-secondary);">${escapeHtml(list.join(', '))}</span>`;
   }
 
   row.innerHTML = `
     <div class="tca-row-main">
       <div class="tca-row-title-line">
-        <span class="tca-patient-name">${escapeHTML(record.name)}</span>
+        <span class="tca-patient-name">${escapeHtml(record.name)}</span>
         ${typeLabel}
       </div>
       <div class="tca-row-sub">
         <span class="tca-date-badge">${formattedTca}</span>
-        <span class="tca-relative-text">${escapeHTML(relativeLabel)}</span>
+        <span class="tca-relative-text">${escapeHtml(relativeLabel)}</span>
         ${bloodLabel}
         ${investigationsLabel}
       </div>

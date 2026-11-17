@@ -1,14 +1,6 @@
 import type { PatientRecord, PatientType } from '../types';
 import { getTCAStatus, formatDisplayDate, isDatePast } from '../utils/date';
-
-function escapeHTML(str: string): string {
-  return (str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import { escapeHtml } from '../utils/escape';
 
 export interface RecordCardActions {
   onView: () => void;
@@ -45,7 +37,7 @@ export function createRecordCard(
     tcaBadgeHtml = `
       <div class="tca-indicator tca-${tcaStatus.type}" title="${tcaStatus.formattedDate || ''}">
         <span class="tca-dot"></span>
-        <span>${escapeHTML(tcaStatus.label)}</span>
+        <span>${escapeHtml(tcaStatus.label)}</span>
       </div>
     `;
   }
@@ -66,7 +58,7 @@ export function createRecordCard(
         <svg class="meta-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
         </svg>
-        <span>${escapeHTML(record.phone)}</span>
+        <span>${escapeHtml(record.phone)}</span>
        </div>`
     : '';
 
@@ -107,7 +99,7 @@ export function createRecordCard(
 
     const chips = visible.map(inv => {
       const label = inv === 'Other' && record.bloodOther ? `Other: ${record.bloodOther}` : inv;
-      return `<span class="mini-chip">${escapeHTML(label)}</span>`;
+      return `<span class="mini-chip">${escapeHtml(label)}</span>`;
     }).join('');
 
     const moreBadge = remaining > 0 ? `<span class="mini-chip mini-chip-more">+${remaining}</span>` : '';
@@ -116,7 +108,7 @@ export function createRecordCard(
 
   // Plan truncated to 2 lines
   const planPreviewHtml = record.plan && record.plan.trim()
-    ? `<div class="card-plan-preview">${escapeHTML(record.plan)}</div>`
+    ? `<div class="card-plan-preview">${escapeHtml(record.plan)}</div>`
     : '';
 
   const tcaDateDisplay = tcaStatus.formattedDate
@@ -132,7 +124,7 @@ export function createRecordCard(
     <div class="card-header-row">
       <div class="card-title-group">
         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-          <h3 class="patient-name">${escapeHTML(record.name)}</h3>
+          <h3 class="patient-name">${escapeHtml(record.name)}</h3>
           ${inactiveBadge}
         </div>
         ${patientTypeLabel}
@@ -160,7 +152,7 @@ export function createRecordCard(
           <line x1="7" y1="8" x2="17" y2="8"></line>
           <line x1="7" y1="12" x2="13" y2="12"></line>
         </svg>
-        <span>IC: ${escapeHTML(record.icNumber)}</span>
+        <span>IC: ${escapeHtml(record.icNumber)}</span>
       </div>
       ${phoneHtml}
     </div>

@@ -109,7 +109,7 @@ class App {
       },
       onPurgeDeleted: async (id) => {
         await recordStorage.purge(id);
-        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+        this.backupSoon();
       },
       onLockNow: () => this.lockScreen.lock()
     });
@@ -308,6 +308,11 @@ class App {
     if (!this.recordsLoaded) return; // nothing shown yet (e.g. locked at startup)
     googleDriveBackupService.rememberPendingBackup();
     window.location.reload();
+  }
+
+  /** After any change to patient data: back up to Google Drive a few seconds later, if connected. */
+  private backupSoon(): void {
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
   }
 
   private async loadRecords(): Promise<void> {
@@ -560,7 +565,7 @@ class App {
     }
 
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    this.backupSoon();
   }
 
   private updateSummaryMetrics(): void {
@@ -650,13 +655,13 @@ class App {
     this.records = this.records.filter(r => r.id !== record.id);
     this.detailsModal.close();
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    this.backupSoon();
     toast.show(`Deleted ${record.name}`, {
       actionLabel: 'Undo',
       onAction: async () => {
         await recordStorage.restore(record.id);
         await this.reloadFromStorage();
-        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+        this.backupSoon();
       }
     });
   }
@@ -680,13 +685,13 @@ class App {
     await recordStorage.put(update);
     this.detailsModal.close();
     await this.reloadFromStorage();
-    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    this.backupSoon();
     toast.show(`Removed from ${program}`, {
       actionLabel: 'Undo',
       onAction: async () => {
         await recordStorage.put({ ...before, updatedAt: new Date().toISOString() });
         await this.reloadFromStorage();
-        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+        this.backupSoon();
       }
     });
   }
@@ -697,7 +702,7 @@ class App {
         const saved = await recordStorage.save({ ...rec, mmt });
         this.updateRecordInState(saved);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+        this.backupSoon();
         return saved;
       },
       onRemoveFromMMT: (rec) => {
@@ -717,7 +722,7 @@ class App {
     const saved = await recordStorage.save({ ...record, mmt });
     this.updateRecordInState(saved);
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    this.backupSoon();
     toast.show(status === 'Dispensed' ? `${record.name}: dispensed` : `${record.name}: missed`, {
       actionLabel: 'Undo',
       onAction: async () => {
@@ -727,7 +732,7 @@ class App {
         const again = await recordStorage.save({ ...saved, mmt: undo });
         this.updateRecordInState(again);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+        this.backupSoon();
       }
     });
   }
@@ -775,7 +780,7 @@ class App {
       return err?.message || 'Could not save.';
     }
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    this.backupSoon();
     return null;
   }
 
@@ -845,7 +850,7 @@ class App {
     toast.show(makeActive ? 'Patient reactivated' : 'Patient deactivated');
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    this.backupSoon();
   }
 
   private async handleChangeCategory(record: PatientRecord, newCategory: PatientType): Promise<void> {
@@ -854,7 +859,7 @@ class App {
     toast.show(`Category changed to ${newCategory} Patient`);
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    this.backupSoon();
   }
 
   private handleScheduleTca(record: PatientRecord): void {
@@ -873,7 +878,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+        this.backupSoon();
       }
       toast.show('New TCA appointment scheduled');
     });
@@ -887,7 +892,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+        this.backupSoon();
       }
       toast.show('Appointment rescheduled');
     });
@@ -905,7 +910,7 @@ class App {
     this.updateRecordInState(updated);
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    this.backupSoon();
     toast.show(`Appointment recorded as ${newStatus}`);
 
     // If marked Attended and patient was New Patient, suggest changing to Existing Patient
@@ -977,7 +982,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+        this.backupSoon();
       }
     });
   }
@@ -1008,7 +1013,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+        this.backupSoon();
       }
       toast.show('New appointment saved');
     });
@@ -1034,7 +1039,7 @@ class App {
     this.records = await recordStorage.list();
     this.renderCurrentView();
     this.renderBackupBanner();
-    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    this.backupSoon();
   }
 
   private registerServiceWorker(): void {

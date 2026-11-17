@@ -7,15 +7,7 @@ import type {
 } from '../types';
 import type { BloodModalAction } from './blood-collection-modal';
 import { getTCAStatus, formatDisplayDate, isDatePast } from '../utils/date';
-
-function escapeHTML(str: string): string {
-  return (str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import { escapeHtml } from '../utils/escape';
 
 export interface DetailsModalHandlers {
   onEdit: (record: PatientRecord) => void;
@@ -173,11 +165,11 @@ export class DetailsModal {
 
     // Phone link
     const phoneLink = record.phone
-      ? `<a href="tel:${escapeHTML(record.phone)}" class="profile-tel-link">
+      ? `<a href="tel:${escapeHtml(record.phone)}" class="profile-tel-link">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
           </svg>
-          <span>${escapeHTML(record.phone)}</span>
+          <span>${escapeHtml(record.phone)}</span>
          </a>`
       : '<span style="color: var(--color-text-tertiary); font-style: italic;">None</span>';
 
@@ -225,17 +217,17 @@ export class DetailsModal {
       if (nextApt.bloodInvestigations && nextApt.bloodInvestigations.length > 0) {
         const chips = nextApt.bloodInvestigations.map(inv => {
           const text = inv === 'Other' && nextApt.bloodOther ? `Other: ${nextApt.bloodOther}` : inv;
-          return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHTML(text)}</span>`;
+          return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHtml(text)}</span>`;
         }).join('');
         invsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
       }
 
       const planHtml = nextApt.plan && nextApt.plan.trim()
-        ? `<div class="detail-plan-box">${escapeHTML(nextApt.plan)}</div>`
+        ? `<div class="detail-plan-box">${escapeHtml(nextApt.plan)}</div>`
         : '<span style="color: var(--color-text-tertiary); font-style: italic;">No specific plan recorded</span>';
 
       const notesHtml = nextApt.notes && nextApt.notes.trim()
-        ? `<div style="font-size: 13px; color: var(--color-text-secondary); margin-top: 4px;"><em>Note: ${escapeHTML(nextApt.notes)}</em></div>`
+        ? `<div style="font-size: 13px; color: var(--color-text-secondary); margin-top: 4px;"><em>Note: ${escapeHtml(nextApt.notes)}</em></div>`
         : '';
 
       upcomingSectionHtml = `
@@ -251,7 +243,7 @@ export class DetailsModal {
               <span class="profile-row-value" style="font-size: 16px; font-weight: 700;">${formattedDate}</span>
               <div class="tca-indicator tca-${tcaStatus.type}">
                 <span class="tca-dot"></span>
-                <span>${escapeHTML(tcaStatus.label)}</span>
+                <span>${escapeHtml(tcaStatus.label)}</span>
               </div>
             </div>
           </div>
@@ -346,19 +338,19 @@ export class DetailsModal {
         if (apt.bloodInvestigations && apt.bloodInvestigations.length > 0) {
           const chips = apt.bloodInvestigations.map(inv => {
             const text = inv === 'Other' && apt.bloodOther ? `Other: ${apt.bloodOther}` : inv;
-            return `<span class="mini-chip" style="font-size: 11.5px; padding: 2px 7px;">${escapeHTML(text)}</span>`;
+            return `<span class="mini-chip" style="font-size: 11.5px; padding: 2px 7px;">${escapeHtml(text)}</span>`;
           }).join('');
           invsChips = `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">${chips}</div>`;
         }
 
         let planText = '';
         if (apt.plan && apt.plan.trim()) {
-          planText = `<div style="font-size: 13px; color: var(--color-text-primary); margin-top: 5px; background-color: var(--color-bg-secondary); padding: 6px 10px; border-radius: var(--radius-sm);">${escapeHTML(apt.plan)}</div>`;
+          planText = `<div style="font-size: 13px; color: var(--color-text-primary); margin-top: 5px; background-color: var(--color-bg-secondary); padding: 6px 10px; border-radius: var(--radius-sm);">${escapeHtml(apt.plan)}</div>`;
         }
 
         let notesText = '';
         if (apt.notes && apt.notes.trim()) {
-          notesText = `<div style="font-size: 12.5px; color: var(--color-text-tertiary); margin-top: 4px;"><em>Notes: ${escapeHTML(apt.notes)}</em></div>`;
+          notesText = `<div style="font-size: 12.5px; color: var(--color-text-tertiary); margin-top: 4px;"><em>Notes: ${escapeHtml(apt.notes)}</em></div>`;
         }
 
         return `
@@ -441,7 +433,7 @@ export class DetailsModal {
     if (nextBld) {
       const isOverdue = isDatePast(nextBld.scheduledDate);
       const formattedDate = formatDisplayDate(nextBld.scheduledDate);
-      const timeDisplay = nextBld.scheduledTime ? `at ${escapeHTML(nextBld.scheduledTime)}` : '';
+      const timeDisplay = nextBld.scheduledTime ? `at ${escapeHtml(nextBld.scheduledTime)}` : '';
 
       let overdueBanner = '';
       if (isOverdue) {
@@ -461,13 +453,13 @@ export class DetailsModal {
       if (nextBld.bloodInvestigations && nextBld.bloodInvestigations.length > 0) {
         const chips = nextBld.bloodInvestigations.map(inv => {
           const text = inv === 'Other' && nextBld.bloodOther ? `Other: ${nextBld.bloodOther}` : inv;
-          return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHTML(text)}</span>`;
+          return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHtml(text)}</span>`;
         }).join('');
         invsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
       }
 
       const notesHtml = nextBld.notes && nextBld.notes.trim()
-        ? `<div style="font-size: 13px; color: var(--color-text-secondary); margin-top: 4px;"><em>Note: ${escapeHTML(nextBld.notes)}</em></div>`
+        ? `<div style="font-size: 13px; color: var(--color-text-secondary); margin-top: 4px;"><em>Note: ${escapeHtml(nextBld.notes)}</em></div>`
         : '';
 
       upcomingBloodSectionHtml = `
@@ -562,7 +554,7 @@ export class DetailsModal {
         let actualCollectionInfo = '';
         if (bld.status === 'Attended' && bld.actualCollectionDate) {
           const actDate = formatDisplayDate(bld.actualCollectionDate);
-          const actTime = bld.actualCollectionTime ? `at ${escapeHTML(bld.actualCollectionTime)}` : '';
+          const actTime = bld.actualCollectionTime ? `at ${escapeHtml(bld.actualCollectionTime)}` : '';
           actualCollectionInfo = `
             <div style="font-size: 13px; color: #248A3D; font-weight: 500; margin-top: 4px;">
               Actual Collection: ${actDate} ${actTime} (Sample Collected at KK Bandar Kulim)
@@ -572,7 +564,7 @@ export class DetailsModal {
 
         let reschedNotice = '';
         if (bld.status === 'Rescheduled') {
-          const reasonText = bld.rescheduledReason ? ` - Reason: ${escapeHTML(bld.rescheduledReason)}` : '';
+          const reasonText = bld.rescheduledReason ? ` - Reason: ${escapeHtml(bld.rescheduledReason)}` : '';
           reschedNotice = `<div style="font-size: 12px; color: #5856D6; font-weight: 500; margin-top: 4px;">Rescheduled to new appointment${reasonText}</div>`;
         }
 
@@ -580,14 +572,14 @@ export class DetailsModal {
         if (bld.bloodInvestigations && bld.bloodInvestigations.length > 0) {
           const chips = bld.bloodInvestigations.map(inv => {
             const text = inv === 'Other' && bld.bloodOther ? `Other: ${bld.bloodOther}` : inv;
-            return `<span class="mini-chip" style="font-size: 11.5px; padding: 2px 7px;">${escapeHTML(text)}</span>`;
+            return `<span class="mini-chip" style="font-size: 11.5px; padding: 2px 7px;">${escapeHtml(text)}</span>`;
           }).join('');
           invsChips = `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">${chips}</div>`;
         }
 
         let notesText = '';
         if (bld.notes && bld.notes.trim()) {
-          notesText = `<div style="font-size: 12.5px; color: var(--color-text-tertiary); margin-top: 4px;"><em>Notes: ${escapeHTML(bld.notes)}</em></div>`;
+          notesText = `<div style="font-size: 12.5px; color: var(--color-text-tertiary); margin-top: 4px;"><em>Notes: ${escapeHtml(bld.notes)}</em></div>`;
         }
 
         return `
@@ -596,7 +588,7 @@ export class DetailsModal {
               <div style="display: flex; align-items: center; gap: 8px;">
                 <span class="tca-history-date">Scheduled: ${scheduledFormatted}</span>
               </div>
-              <span class="appointment-status-badge ${statusClass}">${escapeHTML(statusLabel)}</span>
+              <span class="appointment-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
             </div>
             ${actualCollectionInfo}
             ${reschedNotice}
@@ -635,7 +627,7 @@ export class DetailsModal {
         <div class="profile-header-card">
           <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
             <div>
-              <h2 class="profile-patient-name">${escapeHTML(record.name)}</h2>
+              <h2 class="profile-patient-name">${escapeHtml(record.name)}</h2>
               <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
                 ${categoryTag}
                 <button type="button" id="btn-switch-category" class="btn-text-action" style="font-size: 12.5px; color: var(--color-accent); text-decoration: underline; background: none; border: none; cursor: pointer; padding: 2px;">
@@ -651,11 +643,11 @@ export class DetailsModal {
           <div class="profile-section-title">Patient Identification & Contact</div>
           <div class="profile-row-item">
             <span class="profile-row-label">Patient ID</span>
-            <span class="profile-row-value monospace" style="font-size: 13px; color: var(--color-text-secondary);">${escapeHTML(record.id)}</span>
+            <span class="profile-row-value monospace" style="font-size: 13px; color: var(--color-text-secondary);">${escapeHtml(record.id)}</span>
           </div>
           <div class="profile-row-item">
             <span class="profile-row-label">IC Number</span>
-            <span class="profile-row-value monospace">${escapeHTML(record.icNumber)}</span>
+            <span class="profile-row-value monospace">${escapeHtml(record.icNumber)}</span>
           </div>
           <div class="profile-row-item">
             <span class="profile-row-label">Phone</span>

@@ -1,29 +1,12 @@
-import type { PatientRecord, ThemeMode } from '../types';
+import type { PatientRecord } from '../types';
 import { exportRecordsToJSON, validateImportJSON } from '../utils/export-import';
 import type { ExportScope } from '../utils/export-import';
 import { googleDriveService, GDRIVE_FOLDER_ID, GDRIVE_FOLDER_URL } from '../utils/google-drive';
-import { themeManager } from '../utils/theme';
-import {
-  AUTO_LOCK_OPTIONS,
-  getAutoLockSeconds,
-  hasPin,
-  isValidPinFormat,
-  MAX_PIN_LENGTH,
-  MIN_PIN_LENGTH,
-  removePin,
-  setAutoLockSeconds,
-  setPin,
-  verifyPin
-} from '../utils/app-lock';
-import {
-  changeBackupPassphrase,
-  ensureBackupPassphrase,
-  hasPassphraseVerifier,
-  openBackupText
-} from '../utils/backup-passphrase';
-import { DELETE_RETENTION_DAYS } from '../utils/merge';
+import { ensureBackupPassphrase, openBackupText } from '../utils/backup-passphrase';
 import { saveSafetySnapshot } from '../storage/safety-snapshot';
 import { MessageGenerator } from './message-generator';
+import { renderSecurityPane } from './settings/security-pane';
+import { renderDeletedPane, refreshDeletedList } from './settings/deleted-pane';
 import { confirmSheet } from './confirm-sheet';
 import { toast } from './toast';
 
@@ -38,17 +21,12 @@ export interface SettingsHandlers {
   onLockNow: () => void;
 }
 
-function escapeText(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 export class SettingsModal {
   private overlayEl: HTMLElement;
   private messageGenerator: MessageGenerator;
   private getRecordsCallback: (() => Promise<PatientRecord[]>) | null = null;
   private onImportCallback: ((records: PatientRecord[], mode: 'merge' | 'replace') => Promise<void>) | null = null;
   private handlers: SettingsHandlers | null = null;
-  private pinMode: 'set' | 'change' | 'remove' | null = null;
 
   public configure(handlers: SettingsHandlers): void {
     this.handlers = handlers;
@@ -621,254 +599,25 @@ export class SettingsModal {
     hint.textContent = 'Older ARV-only backups load as ARV patients. Encrypted files ask for their passphrase.';
   }
 
-  // ---------------------------------------------------------------- Security
+  // ------------------------------------------------- Security and Recently Deleted
+  // Built in ./settings/security-pane.ts and ./settings/deleted-pane.ts.
   private renderSecurityPane(): void {
     const pane = this.overlayEl.querySelector('#tab-pane-security') as HTMLElement;
-    const pinOn = hasPin();
-    const timeout = getAutoLockSeconds();
-    const theme = themeManager.getMode();
-
-    const card = 'background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;';
-    const h4 = 'font-size: 15px; font-weight: 600; margin-bottom: 4px;';
-    const note = 'font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px;';
-
-    pane.innerHTML = `
-      <div style="display: flex; flex-direction: column; gap: 14px;">
-        <div style="${card}">
-          <h4 style="${h4}">App lock</h4>
-          <p style="${note}">
-            ${pinOn
-              ? 'A PIN is required to open the app. The screen is hidden in the app switcher, and the app locks itself after the delay below.'
-              : 'Set a PIN so the app cannot be opened by anyone who picks up your phone. This does not replace your phone passcode.'}
-          </p>
-          <div id="pin-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            ${pinOn
-              ? `<button type="button" class="btn-secondary" data-pin-action="change" style="font-weight: 600;">Change PIN</button>
-                 <button type="button" class="btn-secondary" data-pin-action="lock" style="font-weight: 600;">Lock now</button>
-                 <button type="button" class="btn-secondary" data-pin-action="remove" style="font-weight: 600; color: var(--color-destructive);">Turn off PIN</button>`
-              : `<button type="button" class="btn-primary" data-pin-action="set">Set a PIN</button>`}
-          </div>
-
-          <form id="pin-form" hidden autocomplete="off" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-            <div id="pin-current-wrap" hidden>
-              <label class="pp-label" for="pin-current">Current PIN</label>
-              <input id="pin-current" class="form-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="${MAX_PIN_LENGTH}" autocomplete="off" />
-            </div>
-            <div id="pin-new-wrap">
-              <label class="pp-label" for="pin-new">New PIN (${MIN_PIN_LENGTH} to ${MAX_PIN_LENGTH} digits)</label>
-              <input id="pin-new" class="form-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="${MAX_PIN_LENGTH}" autocomplete="new-password" />
-              <label class="pp-label" for="pin-new2" style="margin-top: 8px; display: block;">Repeat new PIN</label>
-              <input id="pin-new2" class="form-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="${MAX_PIN_LENGTH}" autocomplete="new-password" />
-            </div>
-            <p class="pp-warning" id="pin-warning" hidden>The PIN cannot be recovered. If you forget it, the only way back in is to clear this site's data and restore from an encrypted backup.</p>
-            <p class="pp-error" id="pin-error" role="alert"></p>
-            <div style="display: flex; gap: 8px;">
-              <button type="submit" class="btn-primary" id="pin-save" style="flex: 1;">Save</button>
-              <button type="button" class="btn-secondary" id="pin-cancel" style="flex: 1; font-weight: 600;">Cancel</button>
-            </div>
-          </form>
-
-          ${pinOn ? `
-          <label class="pp-label" for="auto-lock-select" style="margin-top: 14px; display: block;">Lock the app</label>
-          <select id="auto-lock-select" class="form-input">
-            ${AUTO_LOCK_OPTIONS.map(o => `<option value="${o.seconds}" ${o.seconds === timeout ? 'selected' : ''}>${o.label}</option>`).join('')}
-          </select>` : ''}
-        </div>
-
-        <div style="${card}">
-          <h4 style="${h4}">Backup encryption</h4>
-          <p style="${note}">
-            Google Drive backups are always locked with a passphrase before they leave this device. Exports are too, unless you choose otherwise when exporting. ${hasPassphraseVerifier() ? 'A passphrase is set up.' : 'You will be asked to create a passphrase at your first backup.'}
-          </p>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
-            <button type="button" class="btn-secondary" id="btn-change-passphrase" style="font-weight: 600;">${hasPassphraseVerifier() ? 'Change passphrase' : 'Create passphrase'}</button>
-          </div>
-        </div>
-
-        <div style="${card}">
-          <h4 style="${h4}">Appearance</h4>
-          <div class="segmented-control" id="theme-seg" role="radiogroup" aria-label="Theme" style="margin-top: 8px;">
-            ${(['system', 'light', 'dark'] as ThemeMode[]).map(m => `<button type="button" class="segment-btn ${m === theme ? 'is-active' : ''}" role="radio" aria-checked="${m === theme}" data-theme-mode="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</button>`).join('')}
-          </div>
-        </div>
-      </div>
-    `;
-
-    this.bindSecurityPane(pane);
-  }
-
-  private bindSecurityPane(pane: HTMLElement): void {
-    const form = pane.querySelector('#pin-form') as HTMLFormElement;
-    const errorEl = pane.querySelector('#pin-error') as HTMLElement;
-    const currentWrap = pane.querySelector('#pin-current-wrap') as HTMLElement;
-    const newWrap = pane.querySelector('#pin-new-wrap') as HTMLElement;
-    const warning = pane.querySelector('#pin-warning') as HTMLElement;
-    const actions = pane.querySelector('#pin-actions') as HTMLElement;
-
-    const openForm = (mode: 'set' | 'change' | 'remove') => {
-      this.pinMode = mode;
-      form.hidden = false;
-      actions.hidden = true;
-      errorEl.textContent = '';
-      currentWrap.hidden = mode === 'set';
-      newWrap.hidden = mode === 'remove';
-      warning.hidden = mode === 'remove';
-      (form.querySelector('#pin-save') as HTMLElement).textContent = mode === 'remove' ? 'Turn off PIN' : 'Save PIN';
-      const first = (mode === 'set' ? form.querySelector('#pin-new') : form.querySelector('#pin-current')) as HTMLInputElement;
-      first?.focus();
-    };
-    const closeForm = () => {
-      this.pinMode = null;
-      this.renderSecurityPane();
-    };
-
-    pane.querySelectorAll('[data-pin-action]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const action = btn.getAttribute('data-pin-action');
-        if (action === 'lock') {
-          this.close();
-          this.handlers?.onLockNow();
-        } else if (action === 'set' || action === 'change' || action === 'remove') {
-          openForm(action);
-        }
-      });
-    });
-
-    (pane.querySelector('#pin-cancel') as HTMLElement | null)?.addEventListener('click', closeForm);
-
-    form?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      errorEl.textContent = '';
-      const val = (id: string) => (form.querySelector(id) as HTMLInputElement | null)?.value || '';
-      const mode = this.pinMode;
-      if (!mode) return;
-
-      if (mode === 'change' || mode === 'remove') {
-        const check = await verifyPin(val('#pin-current'));
-        if (!check.ok) {
-          errorEl.textContent = check.reason === 'throttled'
-            ? `Too many attempts. Try again in ${check.retryInSeconds}s.`
-            : 'The current PIN is not correct.';
-          return;
-        }
+    renderSecurityPane(pane, {
+      onLockNow: () => {
+        this.close();
+        this.handlers?.onLockNow();
       }
-
-      if (mode === 'remove') {
-        removePin();
-        toast.show('PIN turned off');
-        closeForm();
-        return;
-      }
-
-      const next = val('#pin-new');
-      if (!isValidPinFormat(next)) {
-        errorEl.textContent = `Use ${MIN_PIN_LENGTH} to ${MAX_PIN_LENGTH} digits, numbers only.`;
-        return;
-      }
-      if (next !== val('#pin-new2')) {
-        errorEl.textContent = 'The two PINs do not match.';
-        return;
-      }
-      if (/^(\d)\1+$/.test(next) || next === '1234' || next === '123456' || next === '0000') {
-        errorEl.textContent = 'That PIN is too easy to guess. Choose another.';
-        return;
-      }
-      await setPin(next);
-      toast.show(mode === 'set' ? 'PIN set' : 'PIN changed');
-      closeForm();
-    });
-
-    (pane.querySelector('#auto-lock-select') as HTMLSelectElement | null)?.addEventListener('change', (e) => {
-      setAutoLockSeconds(Number((e.target as HTMLSelectElement).value));
-      toast.show('Auto-lock updated');
-    });
-
-    (pane.querySelector('#btn-change-passphrase') as HTMLElement | null)?.addEventListener('click', async () => {
-      const ok = await changeBackupPassphrase();
-      if (ok) {
-        toast.show('Backup passphrase updated');
-        this.renderSecurityPane();
-      }
-    });
-
-    pane.querySelectorAll('[data-theme-mode]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const mode = btn.getAttribute('data-theme-mode') as ThemeMode;
-        themeManager.setTheme(mode);
-        pane.querySelectorAll('[data-theme-mode]').forEach(b => {
-          const on = b === btn;
-          b.classList.toggle('is-active', on);
-          b.setAttribute('aria-checked', String(on));
-        });
-      });
     });
   }
 
-  // ---------------------------------------------------------- Recently deleted
   private renderDeletedPane(): void {
-    const pane = this.overlayEl.querySelector('#tab-pane-deleted') as HTMLElement;
-    pane.innerHTML = `
-      <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
-        <h4 style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">Recently Deleted</h4>
-        <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px;">
-          Deleted patients are kept for ${DELETE_RETENTION_DAYS} days so a mistake can be undone, then removed for good.
-        </p>
-        <div id="deleted-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
-      </div>
-    `;
+    renderDeletedPane(this.overlayEl.querySelector('#tab-pane-deleted') as HTMLElement);
   }
 
   private async refreshDeletedList(): Promise<void> {
-    const listEl = this.overlayEl.querySelector('#deleted-list') as HTMLElement | null;
-    if (!listEl || !this.handlers) return;
-
-    const deleted = await this.handlers.listDeleted();
-    if (deleted.length === 0) {
-      listEl.innerHTML = `<div style="font-size: 13px; color: var(--color-text-secondary);">Nothing here. Deleted patients will appear in this list.</div>`;
-      return;
-    }
-
-    const now = Date.now();
-    listEl.innerHTML = deleted.map(r => {
-      const when = r.deletedAt ? Date.parse(r.deletedAt) : now;
-      const daysLeft = Math.max(0, Math.ceil(DELETE_RETENTION_DAYS - (now - when) / 86400000));
-      const programs = (r.programs && r.programs.length ? r.programs : ['ARV']).join(' + ');
-      return `
-        <div class="deleted-row">
-          <div class="deleted-row-main">
-            <div class="deleted-row-name">${escapeText(r.name)}</div>
-            <div class="deleted-row-meta">${escapeText(programs)} · deleted ${new Date(when).toLocaleDateString()} · ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left</div>
-          </div>
-          <div class="deleted-row-actions">
-            <button type="button" class="btn-secondary" data-restore="${escapeText(r.id)}" style="font-weight: 600;">Restore</button>
-            <button type="button" class="btn-secondary" data-purge="${escapeText(r.id)}" data-name="${escapeText(r.name)}" style="font-weight: 600; color: var(--color-destructive);">Delete now</button>
-          </div>
-        </div>`;
-    }).join('');
-
-    listEl.querySelectorAll('[data-restore]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        await this.handlers?.onRestoreDeleted(btn.getAttribute('data-restore') || '');
-        toast.show('Patient restored');
-        void this.refreshDeletedList();
-      });
-    });
-    listEl.querySelectorAll('[data-purge]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const name = btn.getAttribute('data-name') || 'this patient';
-        const sure = await confirmSheet.show({
-          title: 'Delete permanently?',
-          message: `"${name}" and all of their history will be erased now. This cannot be undone.\n\nOnly their IC number is kept, for up to ${DELETE_RETENTION_DAYS} days, so your other devices delete them too on their next sync.`,
-          confirmLabel: 'Delete Permanently',
-          cancelLabel: 'Keep',
-          isDestructive: true
-        });
-        if (!sure) return;
-        await this.handlers?.onPurgeDeleted(btn.getAttribute('data-purge') || '');
-        toast.show('Permanently deleted');
-        void this.refreshDeletedList();
-      });
-    });
+    if (!this.handlers) return;
+    await refreshDeletedList(this.overlayEl.querySelector('#tab-pane-deleted') as HTMLElement, this.handlers);
   }
 
   private renderAboutPane(): void {
