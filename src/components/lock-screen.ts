@@ -6,13 +6,25 @@ import {
   verifyPin
 } from '../utils/app-lock';
 
+/** Shortest idle time before locking while the app is open ("Immediately" applies when leaving the app). */
+const IDLE_LOCK_MIN_SECONDS = 30;
+/** How often the idle timer is checked. */
+const IDLE_CHECK_MS = 5_000;
+
+/** Idle time before the open app locks itself, for a given auto-lock setting. */
+export function idleLockMs(autoLockSeconds: number): number {
+  return Math.max(autoLockSeconds, IDLE_LOCK_MIN_SECONDS) * 1000;
+}
+
 /**
  * Full-screen PIN lock plus a privacy cover.
  *
- * - The lock hides the whole app (`body.is-locked`) until the correct PIN is entered.
+ * - The lock hides the whole app (`body.is-locked`) until the correct PIN is entered,
+ *   and `onLock` lets the app clear patient screens from the page.
  * - The cover is shown the moment the page is hidden, so the iOS app switcher
  *   snapshot never contains patient names.
  * - Returning after the auto-lock delay brings the lock back.
+ * - With no taps or keys for the idle delay, the open app locks itself too.
  */
 export class LockScreen {
   private lockEl: HTMLElement;
@@ -28,10 +40,13 @@ export class LockScreen {
   private locked = false;
   private hiddenAt = 0;
   private countdownTimer: number | null = null;
+  private lastActivity = Date.now();
   private onUnlock: () => void;
+  private onLock: () => void;
 
-  constructor(onUnlock: () => void) {
+  constructor(onUnlock: () => void, onLock: () => void = () => {}) {
     this.onUnlock = onUnlock;
+    this.onLock = onLock;
 
     this.coverEl = document.createElement('div');
     this.coverEl.className = 'privacy-cover';
@@ -70,10 +85,6 @@ export class LockScreen {
     this.bindEvents();
   }
 
-  public isLocked(): boolean {
-    return this.locked;
-  }
-
   /** Locks right away if a PIN exists. Returns true when the lock was shown. */
   public lockIfNeeded(): boolean {
     if (!hasPin()) return false;
@@ -83,6 +94,7 @@ export class LockScreen {
 
   public lock(): void {
     if (!hasPin()) return;
+    const wasLocked = this.locked;
     this.locked = true;
     this.entered = '';
     this.busy = false;
@@ -95,11 +107,13 @@ export class LockScreen {
     this.coverEl.classList.remove('is-visible');
     this.refreshThrottle();
     this.focusFirstKey();
+    if (!wasLocked) this.onLock();
   }
 
   private unlock(): void {
     this.locked = false;
     this.entered = '';
+    this.lastActivity = Date.now();
     document.body.classList.remove('is-locked');
     this.lockEl.classList.remove('is-open');
     this.coverEl.classList.remove('is-visible');
@@ -175,6 +189,18 @@ export class LockScreen {
     window.addEventListener('pageshow', (e) => {
       if ((e as PageTransitionEvent).persisted) this.onVisible();
     });
+
+    // Idle auto-lock while the app stays open
+    const markActive = () => { this.lastActivity = Date.now(); };
+    for (const type of ['pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll']) {
+      window.addEventListener(type, markActive, { passive: true, capture: true });
+    }
+    window.setInterval(() => this.checkIdle(), IDLE_CHECK_MS);
+  }
+
+  private checkIdle(): void {
+    if (this.locked || !hasPin() || document.visibilityState === 'hidden') return;
+    if (Date.now() - this.lastActivity >= idleLockMs(getAutoLockSeconds())) this.lock();
   }
 
   private onHidden(): void {
@@ -194,6 +220,7 @@ export class LockScreen {
       this.lock();
     } else {
       this.coverEl.classList.remove('is-visible');
+      this.lastActivity = Date.now();
     }
   }
 

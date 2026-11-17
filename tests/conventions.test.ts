@@ -22,9 +22,9 @@ describe('project rules', () => {
   it('localStorage holds only settings, never patient records', () => {
     // Every key written to localStorage must be one of these settings.
     const allowed = new Set([
-      'PROGRAM_KEY', 'ENCRYPT_FLAG_KEY', 'VERIFIER_KEY', 'FAIL_KEY', 'PIN_KEY', 'TIMEOUT_KEY',
-      'GDRIVE_CLIENT_ID_KEY', 'GDRIVE_LAST_BACKUP_KEY', 'GDRIVE_LAST_FILE_KEY',
-      'TAB_STORAGE_KEY', 'SORT_STORAGE_KEY', 'THEME_STORAGE_KEY', 'IDLE_KEY'
+      'PROGRAM_KEY', 'VERIFIER_KEY', 'FAIL_KEY', 'PIN_KEY', 'TIMEOUT_KEY',
+      'GDRIVE_CLIENT_ID_KEY', 'GDRIVE_LAST_BACKUP_KEY', 'GDRIVE_LAST_FILE_KEY', 'GDRIVE_BACKUP_PENDING_KEY',
+      'TAB_STORAGE_KEY', 'SORT_STORAGE_KEY', 'THEME_STORAGE_KEY'
     ]);
     const writes = srcFiles().flatMap(f => [...read(f).matchAll(/localStorage\.setItem\(\s*([^,]+),/g)].map(m => `${path.basename(f)}: ${m[1].trim()}`));
     expect(writes.length).toBeGreaterThan(0);

@@ -19,9 +19,7 @@ import {
   changeBackupPassphrase,
   ensureBackupPassphrase,
   hasPassphraseVerifier,
-  isBackupEncryptionEnabled,
-  openBackupText,
-  setBackupEncryptionEnabled
+  openBackupText
 } from '../utils/backup-passphrase';
 import { DELETE_RETENTION_DAYS } from '../utils/merge';
 import { saveSafetySnapshot } from '../storage/safety-snapshot';
@@ -628,7 +626,6 @@ export class SettingsModal {
     const pane = this.overlayEl.querySelector('#tab-pane-security') as HTMLElement;
     const pinOn = hasPin();
     const timeout = getAutoLockSeconds();
-    const encOn = isBackupEncryptionEnabled();
     const theme = themeManager.getMode();
 
     const card = 'background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;';
@@ -681,12 +678,8 @@ export class SettingsModal {
         <div style="${card}">
           <h4 style="${h4}">Backup encryption</h4>
           <p style="${note}">
-            Backups and exports are locked with a passphrase before they leave this device. ${hasPassphraseVerifier() ? 'A passphrase is set up.' : 'You will be asked to create a passphrase at your first backup.'}
+            Google Drive backups are always locked with a passphrase before they leave this device. Exports are too, unless you choose otherwise when exporting. ${hasPassphraseVerifier() ? 'A passphrase is set up.' : 'You will be asked to create a passphrase at your first backup.'}
           </p>
-          <label class="settings-check">
-            <input type="checkbox" id="backup-encrypt-toggle" ${encOn ? 'checked' : ''} />
-            <span>Encrypt Google Drive backups</span>
-          </label>
           <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
             <button type="button" class="btn-secondary" id="btn-change-passphrase" style="font-weight: 600;">${hasPassphraseVerifier() ? 'Change passphrase' : 'Create passphrase'}</button>
           </div>
@@ -788,25 +781,6 @@ export class SettingsModal {
     (pane.querySelector('#auto-lock-select') as HTMLSelectElement | null)?.addEventListener('change', (e) => {
       setAutoLockSeconds(Number((e.target as HTMLSelectElement).value));
       toast.show('Auto-lock updated');
-    });
-
-    (pane.querySelector('#backup-encrypt-toggle') as HTMLInputElement | null)?.addEventListener('change', async (e) => {
-      const input = e.target as HTMLInputElement;
-      if (!input.checked) {
-        const sure = await confirmSheet.show({
-          title: 'Turn off backup encryption?',
-          message: 'New Google Drive backups will be readable by anyone with access to your Drive folder, including names and IC numbers.',
-          confirmLabel: 'Turn Off Encryption',
-          cancelLabel: 'Keep Encrypting',
-          isDestructive: true
-        });
-        if (!sure) {
-          input.checked = true;
-          return;
-        }
-      }
-      setBackupEncryptionEnabled(input.checked);
-      toast.show(input.checked ? 'Backups will be encrypted' : 'Backup encryption off');
     });
 
     (pane.querySelector('#btn-change-passphrase') as HTMLElement | null)?.addEventListener('click', async () => {

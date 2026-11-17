@@ -4,7 +4,7 @@ import type {
   PatientRecord
 } from '../types';
 import { encryptJSON } from './crypto';
-import { ensureBackupPassphrase, isBackupEncryptionEnabled, openBackupPayload } from './backup-passphrase';
+import { ensureBackupPassphrase, openBackupPayload } from './backup-passphrase';
 import { CURRENT_SCHEMA_VERSION } from './export-import';
 
 export const GDRIVE_FOLDER_ID = '1KSu4II21PraMavPwi6q2Y3ZUdPnedMVS';
@@ -14,6 +14,7 @@ export const GDRIVE_TOKEN_KEY = 'arv_kkbk_gdrive_access_token';
 export const GDRIVE_TOKEN_EXP_KEY = 'arv_kkbk_gdrive_token_exp';
 export const GDRIVE_LAST_BACKUP_KEY = 'arv_kkbk_gdrive_last_backup_time';
 export const GDRIVE_LAST_FILE_KEY = 'arv_kkbk_gdrive_last_backup_file';
+const GDRIVE_BACKUP_PENDING_KEY = 'arv_kkbk_gdrive_backup_pending';
 
 export class GoogleDriveBackupService {
   private status: GoogleDriveBackupStatus = 'Not Connected';
@@ -238,17 +239,14 @@ export class GoogleDriveBackupService {
       return false;
     }
 
-    // Ask for the passphrase before the upload starts, so the status is not stuck on "Backing Up"
-    const encrypt = isBackupEncryptionEnabled();
-    let passphrase: string | null = null;
-    if (encrypt) {
-      passphrase = await ensureBackupPassphrase();
-      if (!passphrase) {
-        this.status = 'Backup Failed';
-        this.lastError = 'Backup passphrase needed. Open Settings, Google Drive, then Backup Now.';
-        this.notifyStatus();
-        return false;
-      }
+    // Drive backups are always encrypted. Ask for the passphrase before the
+    // upload starts, so the status is not stuck on "Backing Up".
+    const passphrase = await ensureBackupPassphrase();
+    if (!passphrase) {
+      this.status = 'Backup Failed';
+      this.lastError = 'Backup passphrase needed. Open Settings, Google Drive, then Backup Now.';
+      this.notifyStatus();
+      return false;
     }
 
     if (this.isBackingUp) return false;
@@ -256,7 +254,7 @@ export class GoogleDriveBackupService {
     this.status = 'Backing Up';
     this.notifyStatus();
 
-    const filename = this.generateBackupFilename(encrypt);
+    const filename = this.generateBackupFilename(true);
     const backupPayload = {
       app: 'ARV_KKBK',
       schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -270,9 +268,7 @@ export class GoogleDriveBackupService {
 
     let fileBody: string;
     try {
-      fileBody = encrypt && passphrase
-        ? JSON.stringify(await encryptJSON(backupPayload, passphrase))
-        : JSON.stringify(backupPayload, null, 2);
+      fileBody = JSON.stringify(await encryptJSON(backupPayload, passphrase));
     } catch (err: any) {
       this.isBackingUp = false;
       this.status = 'Backup Failed';
@@ -363,6 +359,7 @@ export class GoogleDriveBackupService {
     }
 
     this.autoBackupTimer = setTimeout(async () => {
+      this.autoBackupTimer = null;
       try {
         const records = await getRecords();
         await this.uploadBackup(records);
@@ -370,6 +367,25 @@ export class GoogleDriveBackupService {
         console.warn('Auto-backup execution warning:', err);
       }
     }, 3000);
+  }
+
+  /**
+   * Before the page reloads (on lock), remembers that a backup was waiting or
+   * running, so it can run again after unlock instead of being lost.
+   */
+  public rememberPendingBackup(): void {
+    if (!this.autoBackupTimer && !this.isBackingUp) return;
+    try { localStorage.setItem(GDRIVE_BACKUP_PENDING_KEY, '1'); } catch { /* ignore */ }
+  }
+
+  /** Runs a backup that was interrupted by a lock. */
+  public resumePendingBackup(getRecords: () => Promise<PatientRecord[]>): void {
+    let pending = false;
+    try {
+      pending = localStorage.getItem(GDRIVE_BACKUP_PENDING_KEY) === '1';
+      localStorage.removeItem(GDRIVE_BACKUP_PENDING_KEY);
+    } catch { /* ignore */ }
+    if (pending) this.scheduleAutoBackup(getRecords);
   }
 
   /**

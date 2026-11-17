@@ -23,6 +23,7 @@ import { filterRecords } from './utils/search';
 import { generateDemoRecords } from './utils/demo-data';
 import { getDaysDifference } from './utils/date';
 import { googleDriveBackupService } from './utils/google-drive';
+import { clearLegacyEncryptionSetting, forgetPassphraseForSession } from './utils/backup-passphrase';
 import { LockScreen } from './components/lock-screen';
 import { hasPin } from './utils/app-lock';
 
@@ -60,6 +61,7 @@ class App {
   private activeTab: ActiveTab = getSavedTab();
 
   private lockScreen!: LockScreen;
+  private recordsLoaded = false;
   private program: ProgramId = getSavedProgram();
   private mmtModal!: MMTModal;
   private mmtEnrolModal!: MMTEnrolModal;
@@ -84,8 +86,12 @@ class App {
     themeManager.applyTheme();
 
     // 1b. PIN lock: shown before anything else when a PIN is set
-    this.lockScreen = new LockScreen(() => { void this.loadRecords(); });
+    this.lockScreen = new LockScreen(
+      () => { void this.loadRecords(); },
+      () => this.clearAfterLock()
+    );
     this.lockScreen.lockIfNeeded();
+    clearLegacyEncryptionSetting();
 
     // 2. Initialize modal and sheet components
     this.recordModal = new RecordModal();
@@ -291,11 +297,26 @@ class App {
     }
   }
 
+  /**
+   * Runs when the PIN lock appears. If patient data has been shown, the page is
+   * reloaded behind the lock screen: that wipes every patient name from the page
+   * and memory (including the backup passphrase), and records only load again
+   * after the PIN is entered. Unsaved typing in an open form is lost.
+   */
+  private clearAfterLock(): void {
+    forgetPassphraseForSession();
+    if (!this.recordsLoaded) return; // nothing shown yet (e.g. locked at startup)
+    googleDriveBackupService.rememberPendingBackup();
+    window.location.reload();
+  }
+
   private async loadRecords(): Promise<void> {
     try {
       this.records = await recordStorage.list();
+      this.recordsLoaded = true;
       this.renderCurrentView();
       this.renderBackupBanner();
+      googleDriveBackupService.resumePendingBackup(() => recordStorage.listAll());
     } catch (err) {
       this.recordCountEl.textContent = 'Error loading records from IndexedDB';
       console.error(err);

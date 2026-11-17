@@ -10,29 +10,18 @@ import { passphraseSheet } from '../components/passphrase-sheet';
  *   mistyped passphrase is caught before it can start a second, unreadable set of backups.
  */
 
-const ENCRYPT_FLAG_KEY = 'arv_kkbk_backup_encrypt';
 const VERIFIER_KEY = 'arv_kkbk_backup_verifier_v1';
 const VERIFIER_TEXT = 'arv-kkbk-passphrase-check';
 const MAX_ATTEMPTS = 3;
+/** Older versions let Drive encryption be turned off. Drive backups are now always encrypted. */
+const LEGACY_ENCRYPT_FLAG_KEY = 'arv_kkbk_backup_encrypt';
 
 let cachedPassphrase: string | null = null;
 let inFlight: Promise<string | null> | null = null;
 
-/** Encryption is on unless it was explicitly turned off. */
-export function isBackupEncryptionEnabled(): boolean {
-  try {
-    return localStorage.getItem(ENCRYPT_FLAG_KEY) !== '0';
-  } catch {
-    return true;
-  }
-}
-
-export function setBackupEncryptionEnabled(enabled: boolean): void {
-  try {
-    localStorage.setItem(ENCRYPT_FLAG_KEY, enabled ? '1' : '0');
-  } catch {
-    // ignore
-  }
+/** Removes the old on/off setting for Drive encryption, which no longer exists. */
+export function clearLegacyEncryptionSetting(): void {
+  try { localStorage.removeItem(LEGACY_ENCRYPT_FLAG_KEY); } catch { /* ignore */ }
 }
 
 export function hasPassphraseVerifier(): boolean {
@@ -43,12 +32,9 @@ export function hasPassphraseVerifier(): boolean {
   }
 }
 
+/** Called when the app locks, so the passphrase is not left in memory behind the lock screen. */
 export function forgetPassphraseForSession(): void {
   cachedPassphrase = null;
-}
-
-export function hasCachedPassphrase(): boolean {
-  return cachedPassphrase !== null;
 }
 
 async function storeVerifier(passphrase: string): Promise<void> {
