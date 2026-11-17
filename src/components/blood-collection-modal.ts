@@ -1,7 +1,6 @@
 import type {
   PatientRecord,
-  BloodCollectionAppointment,
-  BloodCollectionStatus
+  BloodCollectionAppointment
 } from '../types';
 import { formatDisplayDate, getLocalTodayISO } from '../utils/date';
 
@@ -20,7 +19,6 @@ export interface BloodCollectionSaveData {
 
 export class BloodCollectionModal {
   private overlayEl: HTMLElement;
-  private currentPatient: PatientRecord | null = null;
   private currentCollection: BloodCollectionAppointment | null = null;
   private currentAction: BloodModalAction = 'attend';
   private onSaveCallback: ((data: BloodCollectionSaveData) => Promise<void>) | null = null;
@@ -94,7 +92,6 @@ export class BloodCollectionModal {
     onSave: (data: BloodCollectionSaveData) => Promise<void>,
     triggerEl?: HTMLElement
   ): void {
-    this.currentPatient = patient;
     this.currentCollection = collection;
     this.currentAction = action;
     this.onSaveCallback = onSave;

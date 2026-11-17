@@ -3,8 +3,7 @@ import type {
   TCAAppointment,
   PatientType,
   AppointmentStatus,
-  BloodCollectionAppointment,
-  BloodCollectionStatus
+  BloodCollectionAppointment
 } from '../types';
 import type { BloodModalAction } from './blood-collection-modal';
 import { getTCAStatus, formatDisplayDate, isDatePast } from '../utils/date';
@@ -408,9 +407,8 @@ export class DetailsModal {
               patientId: record.id,
               scheduledDate: record.bloodInvestigationDate,
               status: record.currentBloodStatus || 'Scheduled',
-              investigations: record.bloodInvestigations || [],
-              investigationOther: record.bloodOther,
-              notes: record.notes,
+              bloodInvestigations: record.bloodInvestigations || [],
+              bloodOther: record.bloodOther,
               createdAt: record.createdAt,
               updatedAt: record.updatedAt
             }]
@@ -460,9 +458,9 @@ export class DetailsModal {
       }
 
       let invsHtml = '<span style="color: var(--color-text-tertiary); font-style: italic;">None specified</span>';
-      if (nextBld.investigations && nextBld.investigations.length > 0) {
-        const chips = nextBld.investigations.map(inv => {
-          const text = inv === 'Other' && nextBld.investigationOther ? `Other: ${nextBld.investigationOther}` : inv;
+      if (nextBld.bloodInvestigations && nextBld.bloodInvestigations.length > 0) {
+        const chips = nextBld.bloodInvestigations.map(inv => {
+          const text = inv === 'Other' && nextBld.bloodOther ? `Other: ${nextBld.bloodOther}` : inv;
           return `<span class="mini-chip" style="font-size: 12px; padding: 3px 9px;">${escapeHTML(text)}</span>`;
         }).join('');
         invsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 6px;">${chips}</div>`;
@@ -579,9 +577,9 @@ export class DetailsModal {
         }
 
         let invsChips = '';
-        if (bld.investigations && bld.investigations.length > 0) {
-          const chips = bld.investigations.map(inv => {
-            const text = inv === 'Other' && bld.investigationOther ? `Other: ${bld.investigationOther}` : inv;
+        if (bld.bloodInvestigations && bld.bloodInvestigations.length > 0) {
+          const chips = bld.bloodInvestigations.map(inv => {
+            const text = inv === 'Other' && bld.bloodOther ? `Other: ${bld.bloodOther}` : inv;
             return `<span class="mini-chip" style="font-size: 11.5px; padding: 2px 7px;">${escapeHTML(text)}</span>`;
           }).join('');
           invsChips = `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">${chips}</div>`;

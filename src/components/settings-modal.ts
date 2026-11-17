@@ -28,7 +28,6 @@ import { saveSafetySnapshot } from '../storage/safety-snapshot';
 import { MessageGenerator } from './message-generator';
 import { confirmSheet } from './confirm-sheet';
 import { toast } from './toast';
-import { formatDisplayDate } from '../utils/date';
 
 export type SettingsTab = 'message_gen' | 'gdrive' | 'local_data' | 'security' | 'deleted' | 'about';
 
@@ -47,7 +46,6 @@ function escapeText(value: string): string {
 
 export class SettingsModal {
   private overlayEl: HTMLElement;
-  private activeTab: SettingsTab = 'message_gen';
   private messageGenerator: MessageGenerator;
   private getRecordsCallback: (() => Promise<PatientRecord[]>) | null = null;
   private onImportCallback: ((records: PatientRecord[], mode: 'merge' | 'replace') => Promise<void>) | null = null;
@@ -155,7 +153,6 @@ export class SettingsModal {
   }
 
   public switchTab(tab: SettingsTab): void {
-    this.activeTab = tab;
     (this.overlayEl.querySelector('#settings-home') as HTMLElement).hidden = true;
     (this.overlayEl.querySelector('#settings-detail') as HTMLElement).hidden = false;
     (this.overlayEl.querySelector('#settings-detail-title') as HTMLElement).textContent = SettingsModal.TITLES[tab];

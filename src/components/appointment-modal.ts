@@ -15,9 +15,6 @@ export interface AppointmentModalSaveData {
 
 export class AppointmentModal {
   private overlayEl: HTMLElement;
-  private mode: AppointmentModalMode = 'new';
-  private patient: PatientRecord | null = null;
-  private targetAppointment: TCAAppointment | null = null;
   private isBloodDateManuallyEdited = false;
   private onSaveCallback: ((data: AppointmentModalSaveData) => Promise<void>) | null = null;
   private previousActiveElement: HTMLElement | null = null;
@@ -313,9 +310,6 @@ export class AppointmentModal {
     onSave: (data: AppointmentModalSaveData) => Promise<void>,
     triggerEl?: HTMLElement
   ): void {
-    this.patient = patient;
-    this.mode = mode;
-    this.targetAppointment = targetAppointment;
     this.onSaveCallback = onSave;
     this.previousActiveElement = triggerEl || (document.activeElement as HTMLElement);
 

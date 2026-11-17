@@ -1,5 +1,5 @@
 import type { PatientRecord, TCAGroupKey } from '../types';
-import { formatDisplayDate, getRelativeTCALabel, getDaysDifference, getTCAGroupKey } from '../utils/date';
+import { formatDisplayDate, getRelativeTCALabel, getTCAGroupKey } from'../utils/date';
 
 function escapeHTML(str: string): string {
   return str

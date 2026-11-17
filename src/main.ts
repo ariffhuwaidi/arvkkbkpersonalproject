@@ -21,7 +21,7 @@ import { themeManager } from './utils/theme';
 import { getSavedSort, saveSortPreference, sortRecords, SORT_OPTIONS } from './utils/sort';
 import { filterRecords } from './utils/search';
 import { generateDemoRecords } from './utils/demo-data';
-import { isDatePast, getDaysDifference } from './utils/date';
+import { getDaysDifference } from './utils/date';
 import { googleDriveBackupService } from './utils/google-drive';
 import { LockScreen } from './components/lock-screen';
 import { hasPin } from './utils/app-lock';
@@ -480,13 +480,13 @@ class App {
     // TAB 2: TCA Timeline View
     if (this.activeTab === 'tca') {
       const tcaViewEl = renderTCAView(filtered, (record) => {
-        this.detailsModal.open(record, this.buildDetailsHandlers(record));
+        this.detailsModal.open(record, this.buildDetailsHandlers());
       });
       this.viewContainerEl.appendChild(tcaViewEl);
     }
   }
 
-  private buildDetailsHandlers(record: PatientRecord): DetailsModalHandlers {
+  private buildDetailsHandlers(): DetailsModalHandlers {
     return {
       onEdit: (rec) => this.recordModal.open(rec, this.records, (saved) => this.handleSaveRecord(saved)),
       onDelete: (rec) => this.handleDeleteRecord(rec),
@@ -503,7 +503,7 @@ class App {
   private buildCardActions(record: PatientRecord): RecordCardActions {
     return {
       onView: () => {
-        this.detailsModal.open(record, this.buildDetailsHandlers(record));
+        this.detailsModal.open(record, this.buildDetailsHandlers());
       },
       onEdit: () => {
         this.recordModal.open(record, this.records, (saved) => this.handleSaveRecord(saved));
@@ -962,8 +962,8 @@ class App {
       if (data.bloodInvestigationDate) {
         await recordStorage.addBloodCollection(record.id, {
           scheduledDate: data.bloodInvestigationDate,
-          investigations: data.bloodInvestigations,
-          investigationOther: data.bloodOther,
+          bloodInvestigations: data.bloodInvestigations,
+          bloodOther: data.bloodOther,
           notes: data.notes
         });
       }
