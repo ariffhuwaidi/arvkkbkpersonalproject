@@ -160,7 +160,7 @@ export function createRecordCard(
           <line x1="7" y1="8" x2="17" y2="8"></line>
           <line x1="7" y1="12" x2="13" y2="12"></line>
         </svg>
-        <span>IC: ${escapeHTML(record.icNumber)}</span>
+        <span>IC ending ${escapeHTML((record.icNumber || '').replace(/\D/g, '').slice(-4) || '----')}</span>
       </div>
       ${phoneHtml}
     </div>

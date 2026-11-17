@@ -1,5 +1,13 @@
+export interface ToastOptions {
+  durationMs?: number;
+  /** Label for an action button such as "Undo". */
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
 class ToastManager {
   private el: HTMLElement;
+  private textEl: HTMLElement;
   private timeoutId: number | null = null;
 
   constructor() {
@@ -7,21 +15,51 @@ class ToastManager {
     this.el.className = 'toast-container';
     this.el.setAttribute('role', 'status');
     this.el.setAttribute('aria-live', 'polite');
+
+    this.textEl = document.createElement('span');
+    this.textEl.className = 'toast-text';
+    this.el.appendChild(this.textEl);
+
     document.body.appendChild(this.el);
   }
 
-  show(message: string, durationMs = 2400): void {
+  /** `show(message)`, `show(message, 4000)` or `show(message, { actionLabel, onAction })`. */
+  show(message: string, options: number | ToastOptions = 2400): void {
+    const opts: ToastOptions = typeof options === 'number' ? { durationMs: options } : options;
+
     if (this.timeoutId !== null) {
       window.clearTimeout(this.timeoutId);
     }
 
-    this.el.textContent = message;
+    this.textEl.textContent = message;
+    this.el.querySelector('.toast-action')?.remove();
+    this.el.classList.toggle('has-action', !!opts.actionLabel);
+
+    if (opts.actionLabel && opts.onAction) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'toast-action';
+      btn.textContent = opts.actionLabel;
+      btn.addEventListener('click', () => {
+        this.hide();
+        opts.onAction?.();
+      });
+      this.el.appendChild(btn);
+    }
+
     this.el.classList.add('is-visible');
 
-    this.timeoutId = window.setTimeout(() => {
-      this.el.classList.remove('is-visible');
+    // A toast with an action stays long enough to be tapped
+    const duration = opts.durationMs ?? (opts.actionLabel ? 7000 : 2400);
+    this.timeoutId = window.setTimeout(() => this.hide(), duration);
+  }
+
+  hide(): void {
+    if (this.timeoutId !== null) {
+      window.clearTimeout(this.timeoutId);
       this.timeoutId = null;
-    }, durationMs);
+    }
+    this.el.classList.remove('is-visible');
   }
 }
 

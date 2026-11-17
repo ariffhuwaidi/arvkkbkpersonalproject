@@ -1,40 +1,93 @@
 import { BLOOD_INVESTIGATION_OPTIONS } from '../types';
-import type { PatientRecord, PatientType, TCAAppointment, AppointmentStatus } from '../types';
+import type { PatientRecord, PatientType, TCAAppointment, AppointmentStatus, ProgramId } from '../types';
+import { encryptJSON } from './crypto';
+
+export const CURRENT_SCHEMA_VERSION = 6;
+
+export type ExportScope = 'all' | ProgramId;
 
 export interface ExportDataPayload {
   app: 'ARV_KKBK';
-  version: '4.0';
-  schemaVersion: 4;
+  version: '6.0';
+  schemaVersion: 6;
   exportedAt: string;
+  scope: ExportScope;
   totalRecords: number;
   records: PatientRecord[];
 }
 
+/** Which records belong in an export of the given scope. Deleted records are never exported by scope. */
+export function selectRecordsForScope(records: PatientRecord[], scope: ExportScope): PatientRecord[] {
+  if (scope === 'all') return records;
+  return records.filter(r => !r.deletedAt && (r.programs && r.programs.length ? r.programs : ['ARV']).includes(scope));
+}
+
 /**
- * Creates a downloadable JSON file of current records with appointment history.
+ * A scoped export carries only that program's data. A person enrolled in both
+ * programs appears in an ARV-only file without their MMT block, and vice versa.
  */
-export function exportRecordsToJSON(records: PatientRecord[]): void {
-  const payload: ExportDataPayload = {
+export function stripToScope(record: PatientRecord, scope: ExportScope): PatientRecord {
+  if (scope === 'all') return record;
+  const copy: PatientRecord = { ...record, programs: [scope] };
+  if (scope === 'ARV') delete copy.mmt;
+  if (scope === 'MMT') {
+    delete copy.appointments;
+    delete copy.bloodCollections;
+    delete copy.nextTca;
+    delete copy.bloodInvestigationDate;
+    delete copy.currentBloodStatus;
+    delete copy.plan;
+    delete copy.bloodOther;
+    copy.bloodInvestigations = [];
+  }
+  return copy;
+}
+
+export function buildExportPayload(records: PatientRecord[], scope: ExportScope = 'all'): ExportDataPayload {
+  const chosen = selectRecordsForScope(records, scope).map(r => stripToScope(r, scope));
+  return {
     app: 'ARV_KKBK',
-    version: '4.0',
-    schemaVersion: 4,
+    version: '6.0',
+    schemaVersion: 6,
     exportedAt: new Date().toISOString(),
-    totalRecords: records.length,
-    records
+    scope,
+    totalRecords: chosen.length,
+    records: chosen
   };
+}
 
-  const jsonString = JSON.stringify(payload, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
+function downloadText(filename: string, text: string): void {
+  const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-
-  const dateTag = new Date().toISOString().slice(0, 10);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `arv_kkbk_backup_${dateTag}.json`;
+  anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Downloads records as JSON. With a passphrase the file is encrypted (.arvenc.json);
+ * without one it is readable plain JSON, so callers should warn first.
+ */
+export async function exportRecordsToJSON(
+  records: PatientRecord[],
+  options: { scope?: ExportScope; passphrase?: string } = {}
+): Promise<number> {
+  const scope = options.scope ?? 'all';
+  const payload = buildExportPayload(records, scope);
+  const dateTag = new Date().toISOString().slice(0, 10);
+  const scopeTag = scope === 'all' ? '' : `_${scope.toLowerCase()}`;
+
+  if (options.passphrase) {
+    const envelope = await encryptJSON(payload, options.passphrase);
+    downloadText(`arv_kkbk${scopeTag}_backup_${dateTag}.arvenc.json`, JSON.stringify(envelope));
+  } else {
+    downloadText(`arv_kkbk${scopeTag}_backup_${dateTag}.json`, JSON.stringify(payload, null, 2));
+  }
+  return payload.totalRecords;
 }
 
 export interface ValidationResult {
@@ -51,12 +104,16 @@ const ALLOWED_STATUSES = new Set<AppointmentStatus>(['Scheduled', 'Attended', 'D
  * Validates an imported JSON string or parsed object against ARV KKBK schema.
  * Safely migrates schema version 1, 2, and 3 records to schema 4.
  */
-export function validateImportJSON(rawText: string): ValidationResult {
+export function validateImportJSON(raw: unknown): ValidationResult {
   let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    return { valid: false, error: 'The selected file is not a valid JSON document.' };
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { valid: false, error: 'The selected file is not a valid JSON document.' };
+    }
+  } else {
+    parsed = raw;
   }
 
   if (!parsed || typeof parsed !== 'object') {
@@ -204,7 +261,8 @@ export function validateImportJSON(rawText: string): ValidationResult {
       bloodOther,
       plan,
       createdAt,
-      updatedAt
+      updatedAt,
+      ...extraFields(r)
     });
   }
 
@@ -213,4 +271,30 @@ export function validateImportJSON(rawText: string): ValidationResult {
     records: validRecords,
     schemaVersion: schemaVer
   };
+}
+
+/**
+ * Fields the validator does not rebuild itself but that must survive an import:
+ * blood collection history, programs, the MMT block and deleted markers.
+ * Storage normalises them again when saving.
+ */
+function extraFields(r: Record<string, unknown>): Partial<PatientRecord> {
+  const extra: Partial<PatientRecord> = {};
+  if (Array.isArray(r.bloodCollections)) {
+    extra.bloodCollections = r.bloodCollections as PatientRecord['bloodCollections'];
+  }
+  if (typeof r.currentBloodStatus === 'string') {
+    extra.currentBloodStatus = r.currentBloodStatus as PatientRecord['currentBloodStatus'];
+  }
+  const programs = Array.isArray(r.programs)
+    ? (r.programs.filter(p => p === 'ARV' || p === 'MMT') as ProgramId[])
+    : [];
+  extra.programs = programs.length ? Array.from(new Set(programs)) : ['ARV'];
+  if (r.mmt && typeof r.mmt === 'object') {
+    extra.mmt = r.mmt as PatientRecord['mmt'];
+  }
+  if (typeof r.deletedAt === 'string' && r.deletedAt) {
+    extra.deletedAt = r.deletedAt;
+  }
+  return extra;
 }

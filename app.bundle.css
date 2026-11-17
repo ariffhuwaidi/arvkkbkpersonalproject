@@ -3115,4 +3115,77 @@ body.modal-open {
   --color-input-focus: #0062CC;
 }
 
+/* ---------- App lock, privacy cover ---------- */
+body.is-locked #app { visibility: hidden; }
+.privacy-cover {
+  position: fixed; inset: 0; z-index: 9998; display: none;
+  align-items: center; justify-content: center;
+  background: var(--color-bg-primary);
+}
+.privacy-cover.is-visible { display: flex; }
+.privacy-cover-title { font-size: 22px; font-weight: 700; color: var(--color-text-primary); }
+.lock-screen {
+  position: fixed; inset: 0; z-index: 9999; display: none;
+  align-items: center; justify-content: center;
+  background: var(--color-bg-primary); padding: 24px;
+}
+.lock-screen.is-open { display: flex; }
+.lock-card { width: 100%; max-width: 320px; text-align: center; }
+.lock-title { font-size: 22px; font-weight: 700; margin: 0 0 4px; color: var(--color-text-primary); }
+.lock-sub { font-size: 15px; color: var(--color-text-secondary); margin: 0 0 20px; }
+.lock-dots { display: flex; justify-content: center; gap: 14px; margin-bottom: 10px; min-height: 14px; }
+.lock-dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--color-text-secondary); }
+.lock-dot.is-filled { background: var(--color-text-primary); border-color: var(--color-text-primary); }
+.lock-error { min-height: 20px; font-size: 13px; color: var(--color-destructive); margin: 0 0 12px; }
+.lock-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; justify-items: center; }
+.lock-keypad.is-disabled { opacity: 0.4; pointer-events: none; }
+.lock-key {
+  width: 72px; height: 72px; border-radius: 50%; border: 0;
+  background: var(--color-bg-secondary); color: var(--color-text-primary);
+  font-size: 26px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; font-family: inherit;
+}
+.lock-key:active { background: var(--color-separator); }
+.lock-key:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.lock-forgot { margin-top: 20px; background: none; border: 0; color: var(--color-accent); font-size: 14px; cursor: pointer; font-family: inherit; }
+.lock-help { font-size: 12.5px; color: var(--color-text-secondary); margin-top: 10px; }
+.lock-screen.is-shaking .lock-dots { animation: lock-shake 0.4s; }
+@keyframes lock-shake { 20%,60% { transform: translateX(-8px); } 40%,80% { transform: translateX(8px); } }
+@media (prefers-reduced-motion: reduce) { .lock-screen.is-shaking .lock-dots { animation: none; } }
+
+/* ---------- Passphrase sheet, settings extras ---------- */
+.pp-label { display: block; font-size: 13px; font-weight: 600; color: var(--color-text-secondary); margin-bottom: 6px; }
+.pp-warning { font-size: 12.5px; color: var(--color-text-secondary); background: var(--color-bg-tertiary, var(--color-bg-secondary)); border-radius: 10px; padding: 10px 12px; margin: 0; }
+.pp-error { min-height: 18px; font-size: 13px; color: var(--color-destructive); margin: 0; }
+.settings-check { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--color-text-primary); margin: 6px 0; }
+.settings-check input { width: 20px; height: 20px; }
+.segmented-control { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.segmented-control::-webkit-scrollbar { display: none; }
+.segmented-control .segment-btn { flex: 0 0 auto; white-space: nowrap; }
+
+/* ---------- Toast action ---------- */
+.toast-container.is-visible.has-action { pointer-events: auto; }
+.toast-container.has-action { display: flex; align-items: center; gap: 14px; }
+.toast-action { background: none; border: 0; color: var(--color-accent); font-weight: 700; font-size: 15px; padding: 6px 4px; cursor: pointer; font-family: inherit; }
+
+/* ---------- Backup banner, deleted list ---------- */
+.backup-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator);
+  border-radius: var(--radius-lg); padding: 10px 14px; margin-bottom: 12px;
+  font-size: 14px; color: var(--color-text-primary);
+}
+.backup-banner-btn { background: none; border: 0; color: var(--color-accent); font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit; padding: 6px 4px; }
+.deleted-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 0; border-top: 0.5px solid var(--color-separator); }
+.deleted-row-name { font-weight: 600; font-size: 15px; }
+.deleted-row-meta { font-size: 12.5px; color: var(--color-text-secondary); }
+.deleted-row-actions { display: flex; gap: 8px; }
+
+/* Confirmations and passphrase prompts always sit above other sheets */
+.modal-overlay[role="alertdialog"], .modal-overlay.passphrase-overlay { z-index: 300; }
+
+/* The hidden attribute must win over component display rules */
+[hidden] { display: none !important; }
+.segmented-control .segment-btn { padding-left: 14px; padding-right: 14px; }
+
 

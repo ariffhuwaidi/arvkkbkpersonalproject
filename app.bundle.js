@@ -63,6 +63,64 @@ const BLOOD_INVESTIGATION_OPTIONS = [
 
                                                                                   
 
+                                      
+
+// ---- MMT (Methadone Maintenance Therapy) -------------------------------------
+                                                  
+                                                                 
+                                                              
+
+                                
+             
+                             
+                 
+                  
+ 
+
+                                  
+                                                
+                        
+                  
+ 
+
+                               
+             
+                             
+                      
+                                                                        
+                 
+ 
+
+                              
+             
+                                  
+                                   
+                  
+                 
+ 
+
+                            
+             
+                             
+                            
+                 
+                    
+                    
+ 
+
+                             
+                     
+                         
+                            
+                               
+                             
+                             
+                           
+                       
+                 
+                                                                              
+ 
+
                                 
                                   
                
@@ -72,6 +130,9 @@ const BLOOD_INVESTIGATION_OPTIONS = [
                                                                           
                                                                       
                                                                                        
+                                                                                      
+                                                                               
+                                                                           
 
                                                                                            
                                              
@@ -959,9 +1020,9 @@ function generateDemoRecords()                  {
               
                  
                              
-                       
+                        
+           
                   
-
 const DB_NAME = 'arv_kkbk_db';
 const DB_VERSION = 5;
 const STORE_NAME = 'records';
@@ -1092,7 +1153,22 @@ class IndexedDBStorage                           {
     return this.dbPromise;
   }
 
+  /** Live records only (not in Recently Deleted). */
   async list()                           {
+    const all = await this.listAll();
+    return all.filter(r => !r.deletedAt);
+  }
+
+  /** Records moved to Recently Deleted, newest deletion first. */
+  async listDeleted()                           {
+    const all = await this.listAll();
+    return all
+      .filter(r => !!r.deletedAt)
+      .sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''));
+  }
+
+  /** Every record including deleted ones. Backups use this so deletes sync too. */
+  async listAll()                           {
     const db = await this.getDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
@@ -1245,6 +1321,9 @@ class IndexedDBStorage                           {
       nextTca: record.nextTca ? record.nextTca.trim() : undefined,
       bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
       currentBloodStatus: record.currentBloodStatus || existing?.currentBloodStatus,
+      programs: record.programs && record.programs.length ? record.programs : (existing?.programs && existing.programs.length ? existing.programs : ['ARV']),
+      mmt: record.mmt !== undefined ? record.mmt : existing?.mmt,
+      deletedAt: record.deletedAt !== undefined ? record.deletedAt : existing?.deletedAt,
       bloodInvestigations: investigations,
       bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
       plan: record.plan ? record.plan.trim() : undefined,
@@ -1500,9 +1579,66 @@ class IndexedDBStorage                           {
       bloodInvestigations: activeInvs,
       bloodOther: activeOther,
       plan: activePlan,
+      programs: this.normalizePrograms(raw.programs),
+      ...(raw.mmt && typeof raw.mmt === 'object' ? { mmt: raw.mmt } : {}),
+      ...(typeof raw.deletedAt === 'string' && raw.deletedAt ? { deletedAt: raw.deletedAt } : {}),
       createdAt: raw.createdAt || new Date().toISOString(),
       updatedAt: raw.updatedAt || new Date().toISOString()
     };
+  }
+
+          normalizePrograms(raw         )              {
+    const list = Array.isArray(raw) ? raw.filter((p)                 => p === 'ARV' || p === 'MMT') : [];
+    return list.length ? Array.from(new Set(list)) : ['ARV'];
+  }
+
+  // --- Soft delete (Recently Deleted) ---
+  async softDelete(id        )                                {
+    const rec = await this.get(id);
+    if (!rec) return null;
+    const now = new Date().toISOString();
+    const updated                = { ...rec, deletedAt: now, updatedAt: now };
+    await this.putRaw(updated);
+    return updated;
+  }
+
+  async restore(id        )                                {
+    const rec = await this.get(id);
+    if (!rec) return null;
+    const { deletedAt: _removed, ...rest } = rec;
+    const updated                = { ...rest, updatedAt: new Date().toISOString() };
+    await this.putRaw(updated);
+    return updated;
+  }
+
+  /** Permanently removes deleted records older than the retention period. */
+  async purgeExpiredDeleted()                  {
+    const deleted = await this.listDeleted();
+    const expired = deleted.filter(r => isExpiredTombstone(r));
+    for (const rec of expired) await this.delete(rec.id);
+    return expired.length;
+  }
+
+  /**
+   * Newest-wins merge for sync. Unlike bulkImport this keeps the incoming
+   * updatedAt, so records are not re-stamped and ping-ponged between devices.
+   */
+  async mergeNewer(incoming                 )                                                                                  {
+    const local = await this.listAll();
+    const normalized = incoming.map(r => this.normalizeRecord(r));
+    const plan = planMerge(local, normalized);
+    for (const rec of plan.toPut) await this.putRaw(rec);
+    return { added: plan.added, updated: plan.updated, unchanged: plan.unchanged, skipped: plan.skipped };
+  }
+
+          async putRaw(record               )                {
+    const db = await this.getDB();
+    await new Promise      ((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(record);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
   }
 
   // --- TCA Appointment Methods ---
@@ -1773,8 +1909,16 @@ const recordStorage = new IndexedDBStorage();
 
 
   // --- Module: components/toast ---
+                               
+                      
+                                                   
+                       
+                        
+ 
+
 class ToastManager {
           el             ;
+          textEl             ;
           timeoutId                = null;
 
   constructor() {
@@ -1782,21 +1926,51 @@ class ToastManager {
     this.el.className = 'toast-container';
     this.el.setAttribute('role', 'status');
     this.el.setAttribute('aria-live', 'polite');
+
+    this.textEl = document.createElement('span');
+    this.textEl.className = 'toast-text';
+    this.el.appendChild(this.textEl);
+
     document.body.appendChild(this.el);
   }
 
-  show(message        , durationMs = 2400)       {
+  /** `show(message)`, `show(message, 4000)` or `show(message, { actionLabel, onAction })`. */
+  show(message        , options                        = 2400)       {
+    const opts               = typeof options === 'number' ? { durationMs: options } : options;
+
     if (this.timeoutId !== null) {
       window.clearTimeout(this.timeoutId);
     }
 
-    this.el.textContent = message;
+    this.textEl.textContent = message;
+    this.el.querySelector('.toast-action')?.remove();
+    this.el.classList.toggle('has-action', !!opts.actionLabel);
+
+    if (opts.actionLabel && opts.onAction) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'toast-action';
+      btn.textContent = opts.actionLabel;
+      btn.addEventListener('click', () => {
+        this.hide();
+        opts.onAction?.();
+      });
+      this.el.appendChild(btn);
+    }
+
     this.el.classList.add('is-visible');
 
-    this.timeoutId = window.setTimeout(() => {
-      this.el.classList.remove('is-visible');
+    // A toast with an action stays long enough to be tapped
+    const duration = opts.durationMs ?? (opts.actionLabel ? 7000 : 2400);
+    this.timeoutId = window.setTimeout(() => this.hide(), duration);
+  }
+
+  hide()       {
+    if (this.timeoutId !== null) {
+      window.clearTimeout(this.timeoutId);
       this.timeoutId = null;
-    }, durationMs);
+    }
+    this.el.classList.remove('is-visible');
   }
 }
 
@@ -1916,31 +2090,92 @@ const confirmSheet = new ConfirmSheet();
 
 
   // --- Module: utils/export-import ---
+const CURRENT_SCHEMA_VERSION = 6;
+
+                                            
+
+                                    
+                  
+                 
+                   
+                     
+                     
+                       
+                           
+ 
+
+/** Which records belong in an export of the given scope. Deleted records are never exported by scope. */
+function selectRecordsForScope(records                 , scope             )                  {
+  if (scope === 'all') return records;
+  return records.filter(r => !r.deletedAt && (r.programs && r.programs.length ? r.programs : ['ARV']).includes(scope));
+}
+
 /**
- * Creates a downloadable JSON file of current records with appointment history.
+ * A scoped export carries only that program's data. A person enrolled in both
+ * programs appears in an ARV-only file without their MMT block, and vice versa.
  */
-function exportRecordsToJSON(records                 )       {
-  const payload                    = {
+function stripToScope(record               , scope             )                {
+  if (scope === 'all') return record;
+  const copy                = { ...record, programs: [scope] };
+  if (scope === 'ARV') delete copy.mmt;
+  if (scope === 'MMT') {
+    delete copy.appointments;
+    delete copy.bloodCollections;
+    delete copy.nextTca;
+    delete copy.bloodInvestigationDate;
+    delete copy.currentBloodStatus;
+    delete copy.plan;
+    delete copy.bloodOther;
+    copy.bloodInvestigations = [];
+  }
+  return copy;
+}
+
+function buildExportPayload(records                 , scope              = 'all')                    {
+  const chosen = selectRecordsForScope(records, scope).map(r => stripToScope(r, scope));
+  return {
     app: 'ARV_KKBK',
-    version: '4.0',
-    schemaVersion: 4,
+    version: '6.0',
+    schemaVersion: 6,
     exportedAt: new Date().toISOString(),
-    totalRecords: records.length,
-    records
+    scope,
+    totalRecords: chosen.length,
+    records: chosen
   };
+}
 
-  const jsonString = JSON.stringify(payload, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
+function downloadText(filename        , text        )       {
+  const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-
-  const dateTag = new Date().toISOString().slice(0, 10);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `arv_kkbk_backup_${dateTag}.json`;
+  anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Downloads records as JSON. With a passphrase the file is encrypted (.arvenc.json);
+ * without one it is readable plain JSON, so callers should warn first.
+ */
+export async function exportRecordsToJSON(
+  records                 ,
+  options                                               = {}
+)                  {
+  const scope = options.scope ?? 'all';
+  const payload = buildExportPayload(records, scope);
+  const dateTag = new Date().toISOString().slice(0, 10);
+  const scopeTag = scope === 'all' ? '' : `_${scope.toLowerCase()}`;
+
+  if (options.passphrase) {
+    const envelope = await encryptJSON(payload, options.passphrase);
+    downloadText(`arv_kkbk${scopeTag}_backup_${dateTag}.arvenc.json`, JSON.stringify(envelope));
+  } else {
+    downloadText(`arv_kkbk${scopeTag}_backup_${dateTag}.json`, JSON.stringify(payload, null, 2));
+  }
+  return payload.totalRecords;
 }
 
                                    
@@ -1957,12 +2192,16 @@ const ALLOWED_STATUSES = new Set                   (['Scheduled', 'Attended', 'D
  * Validates an imported JSON string or parsed object against ARV KKBK schema.
  * Safely migrates schema version 1, 2, and 3 records to schema 4.
  */
-function validateImportJSON(rawText        )                   {
+function validateImportJSON(raw         )                   {
   let parsed         ;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    return { valid: false, error: 'The selected file is not a valid JSON document.' };
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { valid: false, error: 'The selected file is not a valid JSON document.' };
+    }
+  } else {
+    parsed = raw;
   }
 
   if (!parsed || typeof parsed !== 'object') {
@@ -2110,7 +2349,8 @@ function validateImportJSON(rawText        )                   {
       bloodOther,
       plan,
       createdAt,
-      updatedAt
+      updatedAt,
+      ...extraFields(r)
     });
   }
 
@@ -2121,6 +2361,32 @@ function validateImportJSON(rawText        )                   {
   };
 }
 
+/**
+ * Fields the validator does not rebuild itself but that must survive an import:
+ * blood collection history, programs, the MMT block and deleted markers.
+ * Storage normalises them again when saving.
+ */
+function extraFields(r                         )                         {
+  const extra                         = {};
+  if (Array.isArray(r.bloodCollections)) {
+    extra.bloodCollections = r.bloodCollections                                     ;
+  }
+  if (typeof r.currentBloodStatus === 'string') {
+    extra.currentBloodStatus = r.currentBloodStatus                                       ;
+  }
+  const programs = Array.isArray(r.programs)
+    ? (r.programs.filter(p => p === 'ARV' || p === 'MMT')               )
+    : [];
+  extra.programs = programs.length ? Array.from(new Set(programs)) : ['ARV'];
+  if (r.mmt && typeof r.mmt === 'object') {
+    extra.mmt = r.mmt                        ;
+  }
+  if (typeof r.deletedAt === 'string' && r.deletedAt) {
+    extra.deletedAt = r.deletedAt;
+  }
+  return extra;
+}
+
 
   // --- Module: utils/google-drive ---
              
@@ -2128,7 +2394,6 @@ function validateImportJSON(rawText        )                   {
                         
                
                   
-
 const GDRIVE_FOLDER_ID = '1KSu4II21PraMavPwi6q2Y3ZUdPnedMVS';
 const GDRIVE_FOLDER_URL = `https://drive.google.com/drive/folders/${GDRIVE_FOLDER_ID}`;
 const GDRIVE_CLIENT_ID_KEY = 'arv_kkbk_gdrive_client_id';
@@ -2331,14 +2596,14 @@ class GoogleDriveBackupService {
   /**
    * Generates formatted backup filename: arv-kkbk-backup-YYYY-MM-DD-HH-mm.json
    */
-         generateBackupFilename()         {
+         generateBackupFilename(encrypted = false)         {
     const now = new Date();
     const YYYY = now.getFullYear();
     const MM = String(now.getMonth() + 1).padStart(2, '0');
     const DD = String(now.getDate()).padStart(2, '0');
     const HH = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
-    return `arv-kkbk-backup-${YYYY}-${MM}-${DD}-${HH}-${mm}.json`;
+    return `arv-kkbk-backup-${YYYY}-${MM}-${DD}-${HH}-${mm}${encrypted ? '.enc' : ''}.json`;
   }
 
   /**
@@ -2361,20 +2626,48 @@ class GoogleDriveBackupService {
       return false;
     }
 
+    // Ask for the passphrase before the upload starts, so the status is not stuck on "Backing Up"
+    const encrypt = isBackupEncryptionEnabled();
+    let passphrase                = null;
+    if (encrypt) {
+      passphrase = await ensureBackupPassphrase();
+      if (!passphrase) {
+        this.status = 'Backup Failed';
+        this.lastError = 'Backup passphrase needed. Open Settings, Google Drive, then Backup Now.';
+        this.notifyStatus();
+        return false;
+      }
+    }
+
+    if (this.isBackingUp) return false;
     this.isBackingUp = true;
     this.status = 'Backing Up';
     this.notifyStatus();
 
-    const filename = this.generateBackupFilename();
+    const filename = this.generateBackupFilename(encrypt);
     const backupPayload = {
-      schemaVersion: 5,
+      app: 'ARV_KKBK',
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
       clinic: 'Klinik Kesihatan Bandar Kulim',
-      program: 'ARV KKBK',
+      programs: ['ARV', 'MMT'],
       destinationFolderId: GDRIVE_FOLDER_ID,
-      patientCount: records.length,
+      patientCount: records.filter(r => !r.deletedAt).length,
       records
     };
+
+    let fileBody        ;
+    try {
+      fileBody = encrypt && passphrase
+        ? JSON.stringify(await encryptJSON(backupPayload, passphrase))
+        : JSON.stringify(backupPayload, null, 2);
+    } catch (err     ) {
+      this.isBackingUp = false;
+      this.status = 'Backup Failed';
+      this.lastError = `Could not encrypt the backup: ${err.message || 'error'}`;
+      this.notifyStatus();
+      return false;
+    }
 
     const boundary = '-------arvkkbkboundary' + Date.now();
     const delimiter = `\r\n--${boundary}\r\n`;
@@ -2392,7 +2685,7 @@ class GoogleDriveBackupService {
       JSON.stringify(metadata) +
       delimiter +
       'Content-Type: application/json\r\n\r\n' +
-      JSON.stringify(backupPayload, null, 2) +
+      fileBody +
       closeDelimiter;
 
     try {
@@ -2511,6 +2804,29 @@ class GoogleDriveBackupService {
     }
 
     return await response.json();
+  }
+
+  /**
+   * Downloads a backup and returns its records, decrypting if needed.
+   * Returns null if the person cancels the passphrase prompt.
+   */
+         async downloadBackupRecords(fileId        )                                                                    {
+    const raw = await this.downloadBackup(fileId);
+    const opened = await openBackupPayload(raw);
+    if (!opened.ok) {
+      if (opened.cancelled) return null;
+      throw new Error(opened.error);
+    }
+    const payload = opened.payload                                                          ;
+    const records = Array.isArray(payload) ? payload : (Array.isArray((payload       )?.records) ? (payload       ).records : null);
+    if (!records) throw new Error('Invalid backup file: no records found');
+    return { records: records                   , exportedAt: Array.isArray(payload) ? undefined : (payload       ).exportedAt };
+  }
+
+  /** Time of the newest backup in the Drive folder, or null if none or not connected. */
+         async getNewestBackup()                                        {
+    const files = await this.listBackups();
+    return files.length > 0 ? files[0] : null;
   }
 
   /**
@@ -2967,7 +3283,7 @@ function createRecordCard(
           <line x1="7" y1="8" x2="17" y2="8"></line>
           <line x1="7" y1="12" x2="13" y2="12"></line>
         </svg>
-        <span>IC: ${escapeHTML(record.icNumber)}</span>
+        <span>IC ending ${escapeHTML((record.icNumber || '').replace(/\D/g, '').slice(-4) || '----')}</span>
       </div>
       ${phoneHtml}
     </div>
@@ -5647,7 +5963,11 @@ class MessageGenerator {
 
 
   // --- Module: components/settings-modal ---
-                                              
+                                                         
+function escapeText(value        )         {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 class SettingsModal {
           overlayEl             ;
           activeTab              = 'message_gen';
@@ -5655,6 +5975,12 @@ class SettingsModal {
           getRecordsCallback                                          = null;
           onImportCallback                                                                                  = null;
           previousActiveElement                     = null;
+          handlers                          = null;
+          pinMode                                     = null;
+
+         configure(handlers                  )       {
+    this.handlers = handlers;
+  }
 
   constructor() {
     this.messageGenerator = new MessageGenerator();
@@ -5689,6 +6015,8 @@ class SettingsModal {
             <button type="button" class="segment-btn is-active" data-set-tab="message_gen">Message Generator</button>
             <button type="button" class="segment-btn" data-set-tab="gdrive">Google Drive</button>
             <button type="button" class="segment-btn" data-set-tab="local_data">Local Data</button>
+            <button type="button" class="segment-btn" data-set-tab="security">Security</button>
+            <button type="button" class="segment-btn" data-set-tab="deleted">Recently Deleted</button>
             <button type="button" class="segment-btn" data-set-tab="about">About</button>
           </div>
         </div>
@@ -5703,7 +6031,13 @@ class SettingsModal {
           <!-- Tab 3: Local Data Backup -->
           <div id="tab-pane-local_data" class="settings-tab-pane" style="display: none;"></div>
 
-          <!-- Tab 4: About & Privacy -->
+          <!-- Tab 4: Security -->
+          <div id="tab-pane-security" class="settings-tab-pane" style="display: none;"></div>
+
+          <!-- Tab 5: Recently Deleted -->
+          <div id="tab-pane-deleted" class="settings-tab-pane" style="display: none;"></div>
+
+          <!-- Tab 6: About & Privacy -->
           <div id="tab-pane-about" class="settings-tab-pane" style="display: none;"></div>
         </div>
       </div>
@@ -5718,6 +6052,8 @@ class SettingsModal {
     this.bindEvents();
     this.renderGDrivePane();
     this.renderLocalDataPane();
+    this.renderSecurityPane();
+    this.renderDeletedPane();
     this.renderAboutPane();
   }
 
@@ -5765,6 +6101,15 @@ class SettingsModal {
     if (tab === 'gdrive') {
       this.refreshGDriveFileList();
     }
+    if (tab === 'security') {
+      this.renderSecurityPane();
+    }
+    if (tab === 'deleted') {
+      void this.refreshDeletedList();
+    }
+    if (tab === 'local_data') {
+      this.refreshLocalDataHint();
+    }
   }
 
           renderGDrivePane()       {
@@ -5801,11 +6146,18 @@ class SettingsModal {
           <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 10px;">
             Target: <code>${GDRIVE_FOLDER_ID}</code>
           </p>
+          <p style="font-size: 12.5px; color: var(--color-text-secondary); margin-bottom: 10px;">
+            Sync Now brings in changes made on your other device (the newest edit to each patient wins), then uploads the combined result. Backups are encrypted with your backup passphrase.
+          </p>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <a href="${GDRIVE_FOLDER_URL}" target="_blank" rel="noopener noreferrer" class="btn-secondary btn-msg-action" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               <span>Open in Google Drive</span>
             </a>
+            <button type="button" id="btn-gdrive-sync-now" class="btn-secondary btn-msg-action" title="Pull the newest backup, merge it with this device, then upload the result">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              <span>Sync Now</span>
+            </button>
             <button type="button" id="btn-gdrive-backup-now" class="btn-primary btn-msg-action">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               <span>Backup Now</span>
@@ -5885,6 +6237,31 @@ class SettingsModal {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             <span>Backup Now</span>
           `;
+        }
+      });
+    }
+
+    // Sync Now
+    const syncBtn = pane.querySelector('#btn-gdrive-sync-now')                     ;
+    if (syncBtn) {
+      syncBtn.addEventListener('click', async () => {
+        if (!this.handlers) return;
+        if (googleDriveService.getStatus() === 'Not Connected') {
+          toast.show('Connect Google Drive first');
+          return;
+        }
+        syncBtn.disabled = true;
+        const label = syncBtn.querySelector('span');
+        if (label) label.textContent = 'Syncing...';
+        try {
+          const message = await this.handlers.onSync();
+          toast.show(message, 4000);
+          this.refreshGDriveFileList();
+        } catch (err     ) {
+          toast.show(`Sync failed: ${err.message || 'Error'}`, 4000);
+        } finally {
+          syncBtn.disabled = false;
+          if (label) label.textContent = 'Sync Now';
         }
       });
     }
@@ -6004,15 +6381,12 @@ class SettingsModal {
           async handleRestoreGDriveFile(fileId        , fileName        )                {
     try {
       toast.show('Downloading backup from Google Drive...');
-      const payload = await googleDriveService.downloadBackup(fileId);
+      const downloaded = await googleDriveService.downloadBackupRecords(fileId);
+      if (!downloaded) return; // passphrase prompt cancelled
 
-      const records = Array.isArray(payload.records) ? payload.records : (Array.isArray(payload) ? payload : null);
-      if (!records) {
-        throw new Error('Invalid backup file: no records found');
-      }
-
-      const count = records.length;
-      const exportTime = payload.exportedAt ? new Date(payload.exportedAt).toLocaleString() : 'Unknown';
+      const records = downloaded.records;
+      const count = records.filter(r => !(r                 ).deletedAt).length;
+      const exportTime = downloaded.exportedAt ? new Date(downloaded.exportedAt).toLocaleString() : 'Unknown';
 
       // Confirmation Dialogue
       const confirmed = await confirmSheet.show({
@@ -6049,8 +6423,18 @@ class SettingsModal {
         <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
           <h4 style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">Export Local JSON</h4>
           <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px;">
-            Download an uncompressed JSON file containing all patient records, TCA histories, and blood collection records stored on this device.
+            Download a JSON file of the records stored on this device, including TCA histories and blood collections.
           </p>
+          <label class="pp-label" for="export-scope">What to include</label>
+          <select id="export-scope" class="form-input" style="margin-bottom: 10px;">
+            <option value="all">Everything (ARV and MMT)</option>
+            <option value="ARV">ARV patients only</option>
+            <option value="MMT">MMT patients only</option>
+          </select>
+          <label class="settings-check">
+            <input type="checkbox" id="export-encrypt" checked />
+            <span>Encrypt with my backup passphrase (recommended)</span>
+          </label>
           <button type="button" id="btn-export-local-json" class="btn-primary" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span>Export JSON File</span>
@@ -6060,8 +6444,9 @@ class SettingsModal {
         <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
           <h4 style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">Import Local JSON</h4>
           <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px;">
-            Restore or merge patient records from an ARV KKBK JSON backup file. Validates schema before applying.
+            Restore or merge patient records from an ARV KKBK backup file, encrypted or not. Validates the file before applying.
           </p>
+          <p id="local-data-hint" style="font-size: 12.5px; color: var(--color-text-tertiary); margin-bottom: 10px;"></p>
           <input type="file" id="local-file-import-input" accept=".json,application/json" style="display: none;" />
           <button type="button" id="btn-trigger-local-import" class="btn-secondary" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -6075,10 +6460,32 @@ class SettingsModal {
     const fileInput = pane.querySelector('#local-file-import-input')                    ;
 
     exportBtn?.addEventListener('click', async () => {
-      if (this.getRecordsCallback) {
+      if (!this.getRecordsCallback) return;
+      const scope = (pane.querySelector('#export-scope')                     ).value               ;
+      const encrypt = (pane.querySelector('#export-encrypt')                    ).checked;
+
+      let passphrase                    ;
+      if (encrypt) {
+        const pass = await ensureBackupPassphrase();
+        if (!pass) return;
+        passphrase = pass;
+      } else {
+        const proceed = await confirmSheet.show({
+          title: 'Export without encryption?',
+          message: 'The file will contain names, IC numbers and phone numbers in plain text. Anyone who opens it can read them. Do not send it by chat or email, and delete it when you are done.',
+          confirmLabel: 'Export Unencrypted',
+          cancelLabel: 'Cancel',
+          isDestructive: true
+        });
+        if (!proceed) return;
+      }
+
+      try {
         const records = await this.getRecordsCallback();
-        exportRecordsToJSON(records);
-        toast.show(`Exported ${records.length} records`);
+        const count = await exportRecordsToJSON(records, { scope, passphrase });
+        toast.show(`Exported ${count} ${count === 1 ? 'record' : 'records'}${passphrase ? ' (encrypted)' : ''}`);
+      } catch (err     ) {
+        toast.show(`Export failed: ${err.message || 'Error'}`);
       }
     });
 
@@ -6092,17 +6499,25 @@ class SettingsModal {
 
       try {
         const text = await file.text();
-        const json = JSON.parse(text);
-        const { valid, records, error } = validateImportJSON(json);
+        const opened = await openBackupText(text);
+        if (!opened.ok) {
+          if (!opened.cancelled) toast.show(`Import error: ${opened.error}`);
+          return;
+        }
+        const { valid, records, error } = validateImportJSON(opened.payload);
 
         if (!valid || !records) {
           toast.show(`Import error: ${error || 'Invalid JSON format'}`);
           return;
         }
 
+        const live = records.filter(r => !r.deletedAt);
+        const arvCount = live.filter(r => (r.programs || ['ARV']).includes('ARV')).length;
+        const mmtCount = live.filter(r => (r.programs || ['ARV']).includes('MMT')).length;
+
         const modeChoice = await confirmSheet.show({
           title: 'Import Records',
-          message: `Found ${records.length} valid patient records in file "${file.name}".\n\nChoose 'Merge' to combine with existing data, or 'Replace' to overwrite all existing records.`,
+          message: `File "${file.name}" has ${live.length} patients (${arvCount} ARV, ${mmtCount} MMT).\n\nMerge combines with what is on this device and keeps the newest edit for each patient. Replace All erases everything on this device first, including patients in the other program.`,
           confirmLabel: 'Merge Records',
           cancelLabel: 'Replace All',
           isDestructive: false
@@ -6110,9 +6525,23 @@ class SettingsModal {
 
         const mode                      = modeChoice ? 'merge' : 'replace';
 
+        if (mode === 'replace') {
+          const sure = await confirmSheet.show({
+            title: 'Replace everything?',
+            message: 'All patients currently on this device will be erased and replaced by the file. A safety copy is kept for a few days.',
+            confirmLabel: 'Replace Everything',
+            cancelLabel: 'Cancel',
+            isDestructive: true
+          });
+          if (!sure) return;
+          if (this.getRecordsCallback) {
+            googleDriveService.savePreRestoreSafetySnapshot(await this.getRecordsCallback());
+          }
+        }
+
         if (this.onImportCallback) {
           await this.onImportCallback(records, mode);
-          toast.show(`Successfully imported ${records.length} records (${mode})`);
+          toast.show(`Imported ${live.length} patients (${mode})`);
           this.close();
         }
       } catch (err     ) {
@@ -6123,13 +6552,292 @@ class SettingsModal {
     });
   }
 
+          refreshLocalDataHint()       {
+    const hint = this.overlayEl.querySelector('#local-data-hint')                      ;
+    if (!hint) return;
+    hint.textContent = 'Older ARV-only backups }
+
+  // ---------------------------------------------------------------- Security
+          renderSecurityPane()       {
+    const pane = this.overlayEl.querySelector('#tab-pane-security')               ;
+    const pinOn = hasPin();
+    const timeout = getAutoLockSeconds();
+    const encOn = isBackupEncryptionEnabled();
+    const theme = themeManager.getMode();
+
+    const card = 'background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;';
+    const h4 = 'font-size: 15px; font-weight: 600; margin-bottom: 4px;';
+    const note = 'font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px;';
+
+    pane.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="${card}">
+          <h4 style="${h4}">App lock</h4>
+          <p style="${note}">
+            ${pinOn
+              ? 'A PIN is required to open the app. The screen is hidden in the app switcher, and the app locks itself after the delay below.'
+              : 'Set a PIN so the app cannot be opened by anyone who picks up your phone. This does not replace your phone passcode.'}
+          </p>
+          <div id="pin-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            ${pinOn
+              ? `<button type="button" class="btn-secondary" data-pin-action="change" style="font-weight: 600;">Change PIN</button>
+                 <button type="button" class="btn-secondary" data-pin-action="lock" style="font-weight: 600;">Lock now</button>
+                 <button type="button" class="btn-secondary" data-pin-action="remove" style="font-weight: 600; color: var(--color-destructive);">Turn off PIN</button>`
+              : `<button type="button" class="btn-primary" data-pin-action="set">Set a PIN</button>`}
+          </div>
+
+          <form id="pin-form" hidden autocomplete="off" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div id="pin-current-wrap" hidden>
+              <label class="pp-label" for="pin-current">Current PIN</label>
+              <input id="pin-current" class="form-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="${MAX_PIN_LENGTH}" autocomplete="off" />
+            </div>
+            <div id="pin-new-wrap">
+              <label class="pp-label" for="pin-new">New PIN (${MIN_PIN_LENGTH} to ${MAX_PIN_LENGTH} digits)</label>
+              <input id="pin-new" class="form-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="${MAX_PIN_LENGTH}" autocomplete="new-password" />
+              <label class="pp-label" for="pin-new2" style="margin-top: 8px; display: block;">Repeat new PIN</label>
+              <input id="pin-new2" class="form-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="${MAX_PIN_LENGTH}" autocomplete="new-password" />
+            </div>
+            <p class="pp-warning" id="pin-warning" hidden>The PIN cannot be recovered. If you forget it, the only way back in is to clear this site's data and restore from an encrypted backup.</p>
+            <p class="pp-error" id="pin-error" role="alert"></p>
+            <div style="display: flex; gap: 8px;">
+              <button type="submit" class="btn-primary" id="pin-save" style="flex: 1;">Save</button>
+              <button type="button" class="btn-secondary" id="pin-cancel" style="flex: 1; font-weight: 600;">Cancel</button>
+            </div>
+          </form>
+
+          ${pinOn ? `
+          <label class="pp-label" for="auto-lock-select" style="margin-top: 14px; display: block;">Lock the app</label>
+          <select id="auto-lock-select" class="form-input">
+            ${AUTO_LOCK_OPTIONS.map(o => `<option value="${o.seconds}" ${o.seconds === timeout ? 'selected' : ''}>${o.label}</option>`).join('')}
+          </select>` : ''}
+        </div>
+
+        <div style="${card}">
+          <h4 style="${h4}">Backup encryption</h4>
+          <p style="${note}">
+            Backups and exports are locked with a passphrase before they leave this device. ${hasPassphraseVerifier() ? 'A passphrase is set up.' : 'You will be asked to create a passphrase at your first backup.'}
+          </p>
+          <label class="settings-check">
+            <input type="checkbox" id="backup-encrypt-toggle" ${encOn ? 'checked' : ''} />
+            <span>Encrypt Google Drive backups</span>
+          </label>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
+            <button type="button" class="btn-secondary" id="btn-change-passphrase" style="font-weight: 600;">${hasPassphraseVerifier() ? 'Change passphrase' : 'Create passphrase'}</button>
+          </div>
+        </div>
+
+        <div style="${card}">
+          <h4 style="${h4}">Appearance</h4>
+          <div class="segmented-control" id="theme-seg" role="radiogroup" aria-label="Theme" style="margin-top: 8px;">
+            ${(['system', 'light', 'dark']               ).map(m => `<button type="button" class="segment-btn ${m === theme ? 'is-active' : ''}" role="radio" aria-checked="${m === theme}" data-theme-mode="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</button>`).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.bindSecurityPane(pane);
+  }
+
+          bindSecurityPane(pane             )       {
+    const form = pane.querySelector('#pin-form')                   ;
+    const errorEl = pane.querySelector('#pin-error')               ;
+    const currentWrap = pane.querySelector('#pin-current-wrap')               ;
+    const newWrap = pane.querySelector('#pin-new-wrap')               ;
+    const warning = pane.querySelector('#pin-warning')               ;
+    const actions = pane.querySelector('#pin-actions')               ;
+
+    const openForm = (mode                             ) => {
+      this.pinMode = mode;
+      form.hidden = false;
+      actions.hidden = true;
+      errorEl.textContent = '';
+      currentWrap.hidden = mode === 'set';
+      newWrap.hidden = mode === 'remove';
+      warning.hidden = mode === 'remove';
+      (form.querySelector('#pin-save')               ).textContent = mode === 'remove' ? 'Turn off PIN' : 'Save PIN';
+      const first = (mode === 'set' ? form.querySelector('#pin-new') : form.querySelector('#pin-current'))                    ;
+      first?.focus();
+    };
+    const closeForm = () => {
+      this.pinMode = null;
+      this.renderSecurityPane();
+    };
+
+    pane.querySelectorAll('[data-pin-action]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.getAttribute('data-pin-action');
+        if (action === 'lock') {
+          this.close();
+          this.handlers?.onLockNow();
+        } else if (action === 'set' || action === 'change' || action === 'remove') {
+          openForm(action);
+        }
+      });
+    });
+
+    (pane.querySelector('#pin-cancel')                      )?.addEventListener('click', closeForm);
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      const val = (id        ) => (form.querySelector(id)                           )?.value || '';
+      const mode = this.pinMode;
+      if (!mode) return;
+
+      if (mode === 'change' || mode === 'remove') {
+        const check = await verifyPin(val('#pin-current'));
+        if (!check.ok) {
+          errorEl.textContent = check.reason === 'throttled'
+            ? `Too many attempts. Try again in ${check.retryInSeconds}s.`
+            : 'The current PIN is not correct.';
+          return;
+        }
+      }
+
+      if (mode === 'remove') {
+        removePin();
+        toast.show('PIN turned off');
+        closeForm();
+        return;
+      }
+
+      const next = val('#pin-new');
+      if (!isValidPinFormat(next)) {
+        errorEl.textContent = `Use ${MIN_PIN_LENGTH} to ${MAX_PIN_LENGTH} digits, numbers only.`;
+        return;
+      }
+      if (next !== val('#pin-new2')) {
+        errorEl.textContent = 'The two PINs do not match.';
+        return;
+      }
+      if (/^(\d)\1+$/.test(next) || next === '1234' || next === '123456' || next === '0000') {
+        errorEl.textContent = 'That PIN is too easy to guess. Choose another.';
+        return;
+      }
+      await setPin(next);
+      toast.show(mode === 'set' ? 'PIN set' : 'PIN changed');
+      closeForm();
+    });
+
+    (pane.querySelector('#auto-lock-select')                            )?.addEventListener('change', (e) => {
+      setAutoLockSeconds(Number((e.target                     ).value));
+      toast.show('Auto-lock updated');
+    });
+
+    (pane.querySelector('#backup-encrypt-toggle')                           )?.addEventListener('change', async (e) => {
+      const input = e.target                    ;
+      if (!input.checked) {
+        const sure = await confirmSheet.show({
+          title: 'Turn off backup encryption?',
+          message: 'New Google Drive backups will be readable by anyone with access to your Drive folder, including names and IC numbers.',
+          confirmLabel: 'Turn Off Encryption',
+          cancelLabel: 'Keep Encrypting',
+          isDestructive: true
+        });
+        if (!sure) {
+          input.checked = true;
+          return;
+        }
+      }
+      setBackupEncryptionEnabled(input.checked);
+      toast.show(input.checked ? 'Backups will be encrypted' : 'Backup encryption off');
+    });
+
+    (pane.querySelector('#btn-change-passphrase')                      )?.addEventListener('click', async () => {
+      const ok = await changeBackupPassphrase();
+      if (ok) {
+        toast.show('Backup passphrase updated');
+        this.renderSecurityPane();
+      }
+    });
+
+    pane.querySelectorAll('[data-theme-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.getAttribute('data-theme-mode')             ;
+        themeManager.setTheme(mode);
+        pane.querySelectorAll('[data-theme-mode]').forEach(b => {
+          const on = b === btn;
+          b.classList.toggle('is-active', on);
+          b.setAttribute('aria-checked', String(on));
+        });
+      });
+    });
+  }
+
+  // ---------------------------------------------------------- Recently deleted
+          renderDeletedPane()       {
+    const pane = this.overlayEl.querySelector('#tab-pane-deleted')               ;
+    pane.innerHTML = `
+      <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 16px;">
+        <h4 style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">Recently Deleted</h4>
+        <p style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 12px;">
+          Deleted patients are kept for ${DELETE_RETENTION_DAYS} days so a mistake can be undone, then removed for good.
+        </p>
+        <div id="deleted-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+      </div>
+    `;
+  }
+
+          async refreshDeletedList()                {
+    const listEl = this.overlayEl.querySelector('#deleted-list')                      ;
+    if (!listEl || !this.handlers) return;
+
+    const deleted = await this.handlers.listDeleted();
+    if (deleted.length === 0) {
+      listEl.innerHTML = `<div style="font-size: 13px; color: var(--color-text-secondary);">Nothing here. Deleted patients will appear in this list.</div>`;
+      return;
+    }
+
+    const now = Date.now();
+    listEl.innerHTML = deleted.map(r => {
+      const when = r.deletedAt ? Date.parse(r.deletedAt) : now;
+      const daysLeft = Math.max(0, Math.ceil(DELETE_RETENTION_DAYS - (now - when) / 86400000));
+      const programs = (r.programs && r.programs.length ? r.programs : ['ARV']).join(' + ');
+      return `
+        <div class="deleted-row">
+          <div class="deleted-row-main">
+            <div class="deleted-row-name">${escapeText(r.name)}</div>
+            <div class="deleted-row-meta">${escapeText(programs)} · deleted ${new Date(when).toLocaleDateString()} · ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left</div>
+          </div>
+          <div class="deleted-row-actions">
+            <button type="button" class="btn-secondary" data-restore="${escapeText(r.id)}" style="font-weight: 600;">Restore</button>
+            <button type="button" class="btn-secondary" data-purge="${escapeText(r.id)}" data-name="${escapeText(r.name)}" style="font-weight: 600; color: var(--color-destructive);">Delete now</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('[data-restore]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await this.handlers?.onRestoreDeleted(btn.getAttribute('data-restore') || '');
+        toast.show('Patient restored');
+        void this.refreshDeletedList();
+      });
+    });
+    listEl.querySelectorAll('[data-purge]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.getAttribute('data-name') || 'this patient';
+        const sure = await confirmSheet.show({
+          title: 'Delete permanently?',
+          message: `"${name}" and all of their history will be erased now. This cannot be undone.`,
+          confirmLabel: 'Delete Permanently',
+          cancelLabel: 'Keep',
+          isDestructive: true
+        });
+        if (!sure) return;
+        await this.handlers?.onPurgeDeleted(btn.getAttribute('data-purge') || '');
+        toast.show('Permanently deleted');
+        void this.refreshDeletedList();
+      });
+    });
+  }
+
           renderAboutPane()       {
     const pane = this.overlayEl.querySelector('#tab-pane-about')               ;
     pane.innerHTML = `
       <div style="background: var(--color-bg-secondary); border: 0.5px solid var(--color-separator); border-radius: var(--radius-lg); padding: 18px; font-size: 13.5px; line-height: 1.5;">
         <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 6px;">ARV KKBK — Personal Record Tracker</h4>
         <p style="color: var(--color-text-secondary); margin-bottom: 12px;">
-          Designed for Klinik Kesihatan Bandar Kulim (KKBK) Antiretroviral & TCA clinical administration.
+          Designed for Klinik Kesihatan Bandar Kulim (KKBK) Antiretroviral and Methadone Maintenance Therapy (MMT) appointment administration.
         </p>
 
         <div style="background: var(--color-bg-primary); border: 1px solid var(--color-separator); border-radius: var(--radius-md); padding: 12px; margin-bottom: 14px; font-size: 12.5px;">
@@ -6142,7 +6850,7 @@ class SettingsModal {
         </div>
 
         <div style="font-size: 12px; color: var(--color-text-tertiary); line-height: 1.45;">
-          <strong>Security Notice:</strong> All data is stored locally in client-side IndexedDB on this device. Never upload unencrypted identifiable patient medical records to public cloud repositories without appropriate KKM approvals.
+          <strong>Security Notice:</strong> All data is stored locally in client-side IndexedDB on this device. Use the PIN lock, keep backups encrypted, and never upload identifiable patient records to public repositories or share unencrypted exports. Confirm with your clinic that storing patient records on a personal device is permitted.
         </div>
       </div>
     `;
@@ -6563,7 +7271,7 @@ function renderTCAView(
         <line x1="8" y1="2" x2="8" y2="6"></line>
         <line x1="3" y1="10" x2="21" y2="10"></line>
       </svg>
-      <h3 class="empty-title">No TCA Appointments Scheduled</h3>
+      <h2 class="empty-title">No TCA Appointments Scheduled</h2>
       <p class="empty-desc">
         There are no matching patient appointments to display in the TCA timeline.
       </p>
@@ -6581,8 +7289,17 @@ function renderTCAView(
     no_tca: []
   };
 
+  // A patient needs follow-up when overdue, or when the last visit was a DNA and nothing is booked
+  const lastDNA = (r               )          => {
+    const apts = Array.isArray(r.appointments) ? [...r.appointments] : [];
+    if (apts.length === 0) return false;
+    apts.sort((a, b) => b.tcaDate.localeCompare(a.tcaDate));
+    return apts[0].status === 'DNA';
+  };
+
   for (const r of records) {
-    const key = getTCAGroupKey(r.nextTca);
+    let key = getTCAGroupKey(r.nextTca);
+    if (key === 'no_tca' && r.isActive !== false && lastDNA(r)) key = 'overdue';
     groups[key].push(r);
   }
 
@@ -6600,7 +7317,7 @@ function renderTCAView(
   groups.no_tca.sort((a, b) => a.name.localeCompare(b.name));
 
   const sectionsConfig                                                                               = [
-    { key: 'overdue', title: 'Overdue', count: groups.overdue.length, className: 'section-overdue' },
+    { key: 'overdue', title: 'Needs follow-up', count: groups.overdue.length, className: 'section-overdue' },
     { key: 'this_week', title: 'This Week (Next 7 Days)', count: groups.this_week.length, className: 'section-upcoming' },
     { key: 'this_month', title: 'This Month', count: groups.this_month.length, className: 'section-month' },
     { key: 'later', title: 'Later', count: groups.later.length, className: 'section-later' }
@@ -6715,36 +7432,19 @@ function createTCARow(record               , onClick            )              {
 
 
   // --- Module: components/header ---
-                                                     
+                                          
+
+                                  
+                       
+                                        
+                         
+                          
+ 
+
 function createHeader(callbacks                 )              {
   const header = document.createElement('header');
   header.className = 'app-header ios-header';
 
-  function getThemeIcon(mode           )         {
-    if (mode === 'light') {
-      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="5"></circle>
-        <line x1="12" y1="1" x2="12" y2="3"></line>
-        <line x1="12" y1="21" x2="12" y2="23"></line>
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-        <line x1="1" y1="12" x2="3" y2="12"></line>
-        <line x1="21" y1="12" x2="23" y2="12"></line>
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-      </svg>`;
-    }
-    if (mode === 'dark') {
-      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-      </svg>`;
-    }
-    return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-      <line x1="8" y1="21" x2="16" y2="21"></line>
-      <line x1="12" y1="17" x2="12" y2="21"></line>
-    </svg>`;
-  }
 
   header.innerHTML = `
     <div class="header-inner">
@@ -6765,10 +7465,6 @@ function createHeader(callbacks                 )              {
       </div>
 
       <div class="header-actions">
-        <button type="button" class="btn-icon header-icon-btn" id="btn-theme-toggle" aria-label="Toggle theme mode" title="Current: ${themeManager.getMode()}">
-          ${getThemeIcon(themeManager.getMode())}
-        </button>
-
         <button type="button" class="btn-pill header-pill-btn" id="btn-open-data" aria-label="Open settings, message generator and backups">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="4" y1="21" x2="4" y2="14"></line>
@@ -6795,17 +7491,9 @@ function createHeader(callbacks                 )              {
     </div>
   `;
 
-  const themeBtn = header.querySelector('#btn-theme-toggle')                     ;
   const dataBtn = header.querySelector('#btn-open-data')                     ;
   const addBtn = header.querySelector('#btn-header-add')                     ;
   const desktopTabs = header.querySelector('#header-desktop-tabs')               ;
-
-  themeBtn.addEventListener('click', () => {
-    callbacks.onThemeToggle();
-    const newMode = themeManager.getMode();
-    themeBtn.innerHTML = getThemeIcon(newMode);
-    themeBtn.title = `Current: ${newMode}`;
-  });
 
   dataBtn.addEventListener('click', () => {
     callbacks.onDataClick();
@@ -6834,6 +7522,7 @@ class App {
           currentFilter                    = 'all';
           activeTab            = getSavedTab();
 
+          lockScreen             ;
           navBar                ;
           recordModal              ;
           detailsModal               ;
@@ -6854,11 +7543,27 @@ class App {
     // 1. Initial theme setup
     themeManager.applyTheme();
 
+    // 1b. PIN lock: shown before anything else when a PIN is set
+    this.lockScreen = new LockScreen(() => { void this.loadRecords(); });
+    this.lockScreen.lockIfNeeded();
+
     // 2. Initialize modal and sheet components
     this.recordModal = new RecordModal();
     this.detailsModal = new DetailsModal();
     this.sortSheet = new SortSheet();
     this.settingsModal = new SettingsModal();
+    this.settingsModal.configure({
+      onSync: () => this.syncWithDrive(),
+      listDeleted: () => recordStorage.listDeleted(),
+      onRestoreDeleted: async (id) => {
+        await recordStorage.restore(id);
+        await this.reloadFromStorage();
+      },
+      onPurgeDeleted: async (id) => {
+        await recordStorage.delete(id);
+      },
+      onLockNow: () => this.lockScreen.lock()
+    });
     this.appointmentModal = new AppointmentModal();
     this.bloodCollectionModal = new BloodCollectionModal();
 
@@ -6871,8 +7576,9 @@ class App {
     // 4. Render base DOM structure
     this.renderLayout();
 
-    // 5. Load records from IndexedDB
-    this.loadRecords();
+    // 5. Load records from IndexedDB (after unlock when a PIN is set)
+    if (!hasPin()) void this.loadRecords();
+    void this.startupHousekeeping();
 
     // 6. Register simple Service Worker for offline app shell
     this.registerServiceWorker();
@@ -6890,16 +7596,9 @@ class App {
       onTabSelect: (tab) => this.navBar.setActiveTab(tab),
       onAddClick: () => this.recordModal.open(null, this.records, (rec) => this.handleSaveRecord(rec)),
       onDataClick: () => this.settingsModal.open(
-        () => Promise.resolve(this.records),
+        () => recordStorage.listAll(),
         (recs, mode) => this.handleImportRecords(recs, mode)
-      ),
-      onThemeToggle: () => {
-        const modes                                     = ['light', 'dark', 'system'];
-        const current = themeManager.getMode();
-        const next = modes[(modes.indexOf(current) + 1) % modes.length];
-        themeManager.setTheme(next);
-        toast.show(`Theme: ${next.charAt(0).toUpperCase() + next.slice(1)}`);
-      }
+      )
     });
     appEl.appendChild(header);
 
@@ -7047,6 +7746,7 @@ class App {
     try {
       this.records = await recordStorage.list();
       this.renderCurrentView();
+      this.renderBackupBanner();
     } catch (err) {
       this.recordCountEl.textContent = 'Error loading records from IndexedDB';
       console.error(err);
@@ -7097,7 +7797,7 @@ class App {
           <line x1="20" y1="8" x2="20" y2="14"></line>
           <line x1="23" y1="11" x2="17" y2="11"></line>
         </svg>
-        <h3 class="empty-title">No Patient Records Yet</h3>
+        <h2 class="empty-title">No Patient Records Yet</h2>
         <p class="empty-desc">
           Add your first patient record or load safe, fictional demo data to test tracking, blood dates, and TCA sorting.
         </p>
@@ -7129,7 +7829,7 @@ class App {
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           <line x1="8" y1="11" x2="14" y2="11"></line>
         </svg>
-        <h3 class="empty-title">No Matching Records</h3>
+        <h2 class="empty-title">No Matching Records</h2>
         <p class="empty-desc">
           No records match your active search and filter selection.
         </p>
@@ -7223,7 +7923,7 @@ class App {
     }
 
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
   }
 
           updateSummaryMetrics()       {
@@ -7276,47 +7976,77 @@ class App {
 
           async handleDeleteRecord(record               )                {
     const aptCount = Array.isArray(record.appointments) ? record.appointments.length : (record.nextTca ? 1 : 0);
-    const hasHistory = aptCount > 0 || (record.bloodInvestigations && record.bloodInvestigations.length > 0);
+    const history = aptCount > 0 ? ` Their ${aptCount} ${aptCount === 1 ? 'appointment' : 'appointments'} and history go with them.` : '';
 
-    if (hasHistory) {
-      const choice = await confirmSheet.show({
-        title: 'Delete Patient Medical Record?',
-        message: `Patient "${record.name}" has ${aptCount} appointment(s) and clinical investigation records in their history. Deleting will permanently remove all medical history.\n\nWe recommend deactivating the patient record instead to safely preserve medical records.`,
-        confirmLabel: 'Deactivate Instead',
-        cancelLabel: 'Delete Permanently',
-        isDestructive: false
-      });
+    const confirmed = await confirmSheet.show({
+      title: 'Delete patient?',
+      message: `"${record.name}" will move to Recently Deleted for 30 days, where you can restore them.${history}`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      isDestructive: true
+    });
+    if (!confirmed) return;
 
-      if (choice) {
-        await this.handleToggleActive(record, false);
-        return;
-      }
-
-      const finalConfirm = await confirmSheet.show({
-        title: 'Confirm Permanent Deletion',
-        message: `Are you absolutely certain? This will PERMANENTLY erase all records, appointments, and lab history for "${record.name}". This cannot be undone.`,
-        confirmLabel: 'Permanently Erase',
-        cancelLabel: 'Keep Record',
-        isDestructive: true
-      });
-
-      if (!finalConfirm) return;
-    } else {
-      const confirmed = await confirmSheet.show({
-        title: 'Delete Patient Record?',
-        message: `Are you sure you want to delete the record for "${record.name}"? This action cannot be undone.`,
-        confirmLabel: 'Delete Record',
-        isDestructive: true
-      });
-      if (!confirmed) return;
-    }
-
-    await recordStorage.delete(record.id);
+    await recordStorage.softDelete(record.id);
     this.records = this.records.filter(r => r.id !== record.id);
     this.detailsModal.close();
-    toast.show('Patient record deleted');
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    toast.show(`Deleted ${record.name}`, {
+      actionLabel: 'Undo',
+      onAction: async () => {
+        await recordStorage.restore(record.id);
+        await this.reloadFromStorage();
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+      }
+    });
+  }
+
+          async reloadFromStorage()                {
+    this.records = await recordStorage.list();
+    this.renderCurrentView();
+  }
+
+  /** Pull the newest Drive backup, merge it by newest edit, then upload the merged set. */
+          async syncWithDrive()                  {
+    const newest = await googleDriveBackupService.getNewestBackup();
+    let summary = 'Nothing to pull from Drive';
+    if (newest) {
+      const downloaded = await googleDriveBackupService.downloadBackupRecords(newest.id);
+      if (!downloaded) throw new Error('Cancelled');
+      const result = await recordStorage.mergeNewer(downloaded.records);
+      summary = `${result.added} added, ${result.updated} updated`;
+      await this.reloadFromStorage();
+    }
+    await googleDriveBackupService.uploadBackup(await recordStorage.listAll());
+    return `Synced: ${summary}`;
+  }
+
+          async startupHousekeeping()                {
+    try { await recordStorage.purgeExpiredDeleted(); } catch (e) { console.warn(e); }
+    try {
+      if (navigator.storage && navigator.storage.persist) await navigator.storage.persist();
+    } catch { /* not supported */ }
+  }
+
+  /** Banner shown when there are records but no recent backup. */
+          renderBackupBanner()       {
+    document.getElementById('backup-banner')?.remove();
+    if (this.records.length === 0) return;
+    const last = googleDriveBackupService.getLastBackupTime();
+    const ageDays = last ? (Date.now() - Date.parse(last)) / 86400000 : Infinity;
+    if (ageDays <= 7) return;
+    const main = document.querySelector('.main-content');
+    if (!main) return;
+    const banner = document.createElement('div');
+    banner.id = 'backup-banner';
+    banner.className = 'backup-banner';
+    banner.setAttribute('role', 'status');
+    banner.innerHTML = `<span>${last ? `Last backup was ${Math.floor(ageDays)} days ago.` : 'This device has never been backed up.'}</span><button type="button" class="backup-banner-btn">Back up</button>`;
+    banner.querySelector('button') .addEventListener('click', () => {
+      this.settingsModal.open(() => recordStorage.listAll(), (recs, mode) => this.handleImportRecords(recs, mode), 'gdrive');
+    });
+    main.prepend(banner);
   }
 
           async handleToggleActive(record               , makeActive         )                {
@@ -7336,7 +8066,7 @@ class App {
     toast.show(makeActive ? 'Patient reactivated' : 'Patient deactivated');
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
   }
 
           async handleChangeCategory(record               , newCategory             )                {
@@ -7345,7 +8075,7 @@ class App {
     toast.show(`Category changed to ${newCategory} Patient`);
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
   }
 
           handleScheduleTca(record               )       {
@@ -7364,7 +8094,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
       }
       toast.show('New TCA appointment scheduled');
     });
@@ -7378,7 +8108,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
       }
       toast.show('Appointment rescheduled');
     });
@@ -7396,7 +8126,7 @@ class App {
     this.updateRecordInState(updated);
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
     toast.show(`Appointment recorded as ${newStatus}`);
 
     // If marked Attended and patient was New Patient, suggest changing to Existing Patient
@@ -7468,7 +8198,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
       }
     });
   }
@@ -7499,7 +8229,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
       }
       toast.show('New appointment saved');
     });
@@ -7524,7 +8254,8 @@ class App {
     await recordStorage.bulkImport(records, mode);
     this.records = await recordStorage.list();
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    this.renderBackupBanner();
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
   }
 
           registerServiceWorker()       {

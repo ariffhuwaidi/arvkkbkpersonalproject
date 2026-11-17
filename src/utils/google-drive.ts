@@ -3,6 +3,9 @@ import type {
   GoogleDriveBackupFile,
   PatientRecord
 } from '../types';
+import { encryptJSON } from './crypto';
+import { ensureBackupPassphrase, isBackupEncryptionEnabled, openBackupPayload } from './backup-passphrase';
+import { CURRENT_SCHEMA_VERSION } from './export-import';
 
 export const GDRIVE_FOLDER_ID = '1KSu4II21PraMavPwi6q2Y3ZUdPnedMVS';
 export const GDRIVE_FOLDER_URL = `https://drive.google.com/drive/folders/${GDRIVE_FOLDER_ID}`;
@@ -206,14 +209,14 @@ export class GoogleDriveBackupService {
   /**
    * Generates formatted backup filename: arv-kkbk-backup-YYYY-MM-DD-HH-mm.json
    */
-  public generateBackupFilename(): string {
+  public generateBackupFilename(encrypted = false): string {
     const now = new Date();
     const YYYY = now.getFullYear();
     const MM = String(now.getMonth() + 1).padStart(2, '0');
     const DD = String(now.getDate()).padStart(2, '0');
     const HH = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
-    return `arv-kkbk-backup-${YYYY}-${MM}-${DD}-${HH}-${mm}.json`;
+    return `arv-kkbk-backup-${YYYY}-${MM}-${DD}-${HH}-${mm}${encrypted ? '.enc' : ''}.json`;
   }
 
   /**
@@ -236,20 +239,48 @@ export class GoogleDriveBackupService {
       return false;
     }
 
+    // Ask for the passphrase before the upload starts, so the status is not stuck on "Backing Up"
+    const encrypt = isBackupEncryptionEnabled();
+    let passphrase: string | null = null;
+    if (encrypt) {
+      passphrase = await ensureBackupPassphrase();
+      if (!passphrase) {
+        this.status = 'Backup Failed';
+        this.lastError = 'Backup passphrase needed. Open Settings, Google Drive, then Backup Now.';
+        this.notifyStatus();
+        return false;
+      }
+    }
+
+    if (this.isBackingUp) return false;
     this.isBackingUp = true;
     this.status = 'Backing Up';
     this.notifyStatus();
 
-    const filename = this.generateBackupFilename();
+    const filename = this.generateBackupFilename(encrypt);
     const backupPayload = {
-      schemaVersion: 5,
+      app: 'ARV_KKBK',
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
       clinic: 'Klinik Kesihatan Bandar Kulim',
-      program: 'ARV KKBK',
+      programs: ['ARV', 'MMT'],
       destinationFolderId: GDRIVE_FOLDER_ID,
-      patientCount: records.length,
+      patientCount: records.filter(r => !r.deletedAt).length,
       records
     };
+
+    let fileBody: string;
+    try {
+      fileBody = encrypt && passphrase
+        ? JSON.stringify(await encryptJSON(backupPayload, passphrase))
+        : JSON.stringify(backupPayload, null, 2);
+    } catch (err: any) {
+      this.isBackingUp = false;
+      this.status = 'Backup Failed';
+      this.lastError = `Could not encrypt the backup: ${err.message || 'error'}`;
+      this.notifyStatus();
+      return false;
+    }
 
     const boundary = '-------arvkkbkboundary' + Date.now();
     const delimiter = `\r\n--${boundary}\r\n`;
@@ -267,7 +298,7 @@ export class GoogleDriveBackupService {
       JSON.stringify(metadata) +
       delimiter +
       'Content-Type: application/json\r\n\r\n' +
-      JSON.stringify(backupPayload, null, 2) +
+      fileBody +
       closeDelimiter;
 
     try {
@@ -386,6 +417,29 @@ export class GoogleDriveBackupService {
     }
 
     return await response.json();
+  }
+
+  /**
+   * Downloads a backup and returns its records, decrypting if needed.
+   * Returns null if the person cancels the passphrase prompt.
+   */
+  public async downloadBackupRecords(fileId: string): Promise<{ records: PatientRecord[]; exportedAt?: string } | null> {
+    const raw = await this.downloadBackup(fileId);
+    const opened = await openBackupPayload(raw);
+    if (!opened.ok) {
+      if (opened.cancelled) return null;
+      throw new Error(opened.error);
+    }
+    const payload = opened.payload as { records?: unknown; exportedAt?: string } | unknown[];
+    const records = Array.isArray(payload) ? payload : (Array.isArray((payload as any)?.records) ? (payload as any).records : null);
+    if (!records) throw new Error('Invalid backup file: no records found');
+    return { records: records as PatientRecord[], exportedAt: Array.isArray(payload) ? undefined : (payload as any).exportedAt };
+  }
+
+  /** Time of the newest backup in the Drive folder, or null if none or not connected. */
+  public async getNewestBackup(): Promise<GoogleDriveBackupFile | null> {
+    const files = await this.listBackups();
+    return files.length > 0 ? files[0] : null;
   }
 
   /**

@@ -5,6 +5,8 @@ import { filterRecords } from './utils/search.js';
 import { generateDemoRecords } from './utils/demo-data.js';
 import { isDatePast, getDaysDifference } from './utils/date.js';
 import { googleDriveBackupService } from './utils/google-drive.js';
+import { LockScreen } from './components/lock-screen.js';
+import { hasPin } from './utils/app-lock.js';
 
 import { createHeader } from './components/header.js';
 import { createRecordCard, RecordCardActions } from './components/record-card.js';
@@ -26,6 +28,7 @@ class App {
           currentFilter                    = 'all';
           activeTab            = getSavedTab();
 
+          lockScreen             ;
           navBar                ;
           recordModal              ;
           detailsModal               ;
@@ -46,11 +49,27 @@ class App {
     // 1. Initial theme setup
     themeManager.applyTheme();
 
+    // 1b. PIN lock: shown before anything else when a PIN is set
+    this.lockScreen = new LockScreen(() => { void this.loadRecords(); });
+    this.lockScreen.lockIfNeeded();
+
     // 2. Initialize modal and sheet components
     this.recordModal = new RecordModal();
     this.detailsModal = new DetailsModal();
     this.sortSheet = new SortSheet();
     this.settingsModal = new SettingsModal();
+    this.settingsModal.configure({
+      onSync: () => this.syncWithDrive(),
+      listDeleted: () => recordStorage.listDeleted(),
+      onRestoreDeleted: async (id) => {
+        await recordStorage.restore(id);
+        await this.reloadFromStorage();
+      },
+      onPurgeDeleted: async (id) => {
+        await recordStorage.delete(id);
+      },
+      onLockNow: () => this.lockScreen.lock()
+    });
     this.appointmentModal = new AppointmentModal();
     this.bloodCollectionModal = new BloodCollectionModal();
 
@@ -63,8 +82,9 @@ class App {
     // 4. Render base DOM structure
     this.renderLayout();
 
-    // 5. Load records from IndexedDB
-    this.loadRecords();
+    // 5. Load records from IndexedDB (after unlock when a PIN is set)
+    if (!hasPin()) void this.loadRecords();
+    void this.startupHousekeeping();
 
     // 6. Register simple Service Worker for offline app shell
     this.registerServiceWorker();
@@ -82,16 +102,9 @@ class App {
       onTabSelect: (tab) => this.navBar.setActiveTab(tab),
       onAddClick: () => this.recordModal.open(null, this.records, (rec) => this.handleSaveRecord(rec)),
       onDataClick: () => this.settingsModal.open(
-        () => Promise.resolve(this.records),
+        () => recordStorage.listAll(),
         (recs, mode) => this.handleImportRecords(recs, mode)
-      ),
-      onThemeToggle: () => {
-        const modes                                     = ['light', 'dark', 'system'];
-        const current = themeManager.getMode();
-        const next = modes[(modes.indexOf(current) + 1) % modes.length];
-        themeManager.setTheme(next);
-        toast.show(`Theme: ${next.charAt(0).toUpperCase() + next.slice(1)}`);
-      }
+      )
     });
     appEl.appendChild(header);
 
@@ -239,6 +252,7 @@ class App {
     try {
       this.records = await recordStorage.list();
       this.renderCurrentView();
+      this.renderBackupBanner();
     } catch (err) {
       this.recordCountEl.textContent = 'Error loading records from IndexedDB';
       console.error(err);
@@ -289,7 +303,7 @@ class App {
           <line x1="20" y1="8" x2="20" y2="14"></line>
           <line x1="23" y1="11" x2="17" y2="11"></line>
         </svg>
-        <h3 class="empty-title">No Patient Records Yet</h3>
+        <h2 class="empty-title">No Patient Records Yet</h2>
         <p class="empty-desc">
           Add your first patient record or load safe, fictional demo data to test tracking, blood dates, and TCA sorting.
         </p>
@@ -321,7 +335,7 @@ class App {
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           <line x1="8" y1="11" x2="14" y2="11"></line>
         </svg>
-        <h3 class="empty-title">No Matching Records</h3>
+        <h2 class="empty-title">No Matching Records</h2>
         <p class="empty-desc">
           No records match your active search and filter selection.
         </p>
@@ -415,7 +429,7 @@ class App {
     }
 
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
   }
 
           updateSummaryMetrics()       {
@@ -468,47 +482,77 @@ class App {
 
           async handleDeleteRecord(record               )                {
     const aptCount = Array.isArray(record.appointments) ? record.appointments.length : (record.nextTca ? 1 : 0);
-    const hasHistory = aptCount > 0 || (record.bloodInvestigations && record.bloodInvestigations.length > 0);
+    const history = aptCount > 0 ? ` Their ${aptCount} ${aptCount === 1 ? 'appointment' : 'appointments'} and history go with them.` : '';
 
-    if (hasHistory) {
-      const choice = await confirmSheet.show({
-        title: 'Delete Patient Medical Record?',
-        message: `Patient "${record.name}" has ${aptCount} appointment(s) and clinical investigation records in their history. Deleting will permanently remove all medical history.\n\nWe recommend deactivating the patient record instead to safely preserve medical records.`,
-        confirmLabel: 'Deactivate Instead',
-        cancelLabel: 'Delete Permanently',
-        isDestructive: false
-      });
+    const confirmed = await confirmSheet.show({
+      title: 'Delete patient?',
+      message: `"${record.name}" will move to Recently Deleted for 30 days, where you can restore them.${history}`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      isDestructive: true
+    });
+    if (!confirmed) return;
 
-      if (choice) {
-        await this.handleToggleActive(record, false);
-        return;
-      }
-
-      const finalConfirm = await confirmSheet.show({
-        title: 'Confirm Permanent Deletion',
-        message: `Are you absolutely certain? This will PERMANENTLY erase all records, appointments, and lab history for "${record.name}". This cannot be undone.`,
-        confirmLabel: 'Permanently Erase',
-        cancelLabel: 'Keep Record',
-        isDestructive: true
-      });
-
-      if (!finalConfirm) return;
-    } else {
-      const confirmed = await confirmSheet.show({
-        title: 'Delete Patient Record?',
-        message: `Are you sure you want to delete the record for "${record.name}"? This action cannot be undone.`,
-        confirmLabel: 'Delete Record',
-        isDestructive: true
-      });
-      if (!confirmed) return;
-    }
-
-    await recordStorage.delete(record.id);
+    await recordStorage.softDelete(record.id);
     this.records = this.records.filter(r => r.id !== record.id);
     this.detailsModal.close();
-    toast.show('Patient record deleted');
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+    toast.show(`Deleted ${record.name}`, {
+      actionLabel: 'Undo',
+      onAction: async () => {
+        await recordStorage.restore(record.id);
+        await this.reloadFromStorage();
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
+      }
+    });
+  }
+
+          async reloadFromStorage()                {
+    this.records = await recordStorage.list();
+    this.renderCurrentView();
+  }
+
+  /** Pull the newest Drive backup, merge it by newest edit, then upload the merged set. */
+          async syncWithDrive()                  {
+    const newest = await googleDriveBackupService.getNewestBackup();
+    let summary = 'Nothing to pull from Drive';
+    if (newest) {
+      const downloaded = await googleDriveBackupService.downloadBackupRecords(newest.id);
+      if (!downloaded) throw new Error('Cancelled');
+      const result = await recordStorage.mergeNewer(downloaded.records);
+      summary = `${result.added} added, ${result.updated} updated`;
+      await this.reloadFromStorage();
+    }
+    await googleDriveBackupService.uploadBackup(await recordStorage.listAll());
+    return `Synced: ${summary}`;
+  }
+
+          async startupHousekeeping()                {
+    try { await recordStorage.purgeExpiredDeleted(); } catch (e) { console.warn(e); }
+    try {
+      if (navigator.storage && navigator.storage.persist) await navigator.storage.persist();
+    } catch { /* not supported */ }
+  }
+
+  /** Banner shown when there are records but no recent backup. */
+          renderBackupBanner()       {
+    document.getElementById('backup-banner')?.remove();
+    if (this.records.length === 0) return;
+    const last = googleDriveBackupService.getLastBackupTime();
+    const ageDays = last ? (Date.now() - Date.parse(last)) / 86400000 : Infinity;
+    if (ageDays <= 7) return;
+    const main = document.querySelector('.main-content');
+    if (!main) return;
+    const banner = document.createElement('div');
+    banner.id = 'backup-banner';
+    banner.className = 'backup-banner';
+    banner.setAttribute('role', 'status');
+    banner.innerHTML = `<span>${last ? `Last backup was ${Math.floor(ageDays)} days ago.` : 'This device has never been backed up.'}</span><button type="button" class="backup-banner-btn">Back up</button>`;
+    banner.querySelector('button') .addEventListener('click', () => {
+      this.settingsModal.open(() => recordStorage.listAll(), (recs, mode) => this.handleImportRecords(recs, mode), 'gdrive');
+    });
+    main.prepend(banner);
   }
 
           async handleToggleActive(record               , makeActive         )                {
@@ -528,7 +572,7 @@ class App {
     toast.show(makeActive ? 'Patient reactivated' : 'Patient deactivated');
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
   }
 
           async handleChangeCategory(record               , newCategory             )                {
@@ -537,7 +581,7 @@ class App {
     toast.show(`Category changed to ${newCategory} Patient`);
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
   }
 
           handleScheduleTca(record               )       {
@@ -556,7 +600,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
       }
       toast.show('New TCA appointment scheduled');
     });
@@ -570,7 +614,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
       }
       toast.show('Appointment rescheduled');
     });
@@ -588,7 +632,7 @@ class App {
     this.updateRecordInState(updated);
     this.detailsModal.updateRecord(updated);
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
     toast.show(`Appointment recorded as ${newStatus}`);
 
     // If marked Attended and patient was New Patient, suggest changing to Existing Patient
@@ -660,7 +704,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
       }
     });
   }
@@ -691,7 +735,7 @@ class App {
         this.updateRecordInState(updated);
         this.detailsModal.updateRecord(updated);
         this.renderCurrentView();
-        googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+        googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
       }
       toast.show('New appointment saved');
     });
@@ -716,7 +760,8 @@ class App {
     await recordStorage.bulkImport(records, mode);
     this.records = await recordStorage.list();
     this.renderCurrentView();
-    googleDriveBackupService.scheduleAutoBackup(() => Promise.resolve(this.records));
+    this.renderBackupBanner();
+    googleDriveBackupService.scheduleAutoBackup(() => recordStorage.listAll());
   }
 
           registerServiceWorker()       {

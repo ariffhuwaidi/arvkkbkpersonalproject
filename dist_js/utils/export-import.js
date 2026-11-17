@@ -1,29 +1,92 @@
 import { BLOOD_INVESTIGATION_OPTIONS } from '../types.js';
+import { encryptJSON } from './crypto.js';
+
+export const CURRENT_SCHEMA_VERSION = 6;
+
+                                            
+
+                                    
+                  
+                 
+                   
+                     
+                     
+                       
+                           
+ 
+
+/** Which records belong in an export of the given scope. Deleted records are never exported by scope. */
+export function selectRecordsForScope(records                 , scope             )                  {
+  if (scope === 'all') return records;
+  return records.filter(r => !r.deletedAt && (r.programs && r.programs.length ? r.programs : ['ARV']).includes(scope));
+}
+
 /**
- * Creates a downloadable JSON file of current records with appointment history.
+ * A scoped export carries only that program's data. A person enrolled in both
+ * programs appears in an ARV-only file without their MMT block, and vice versa.
  */
-export function exportRecordsToJSON(records                 )       {
-  const payload                    = {
+export function stripToScope(record               , scope             )                {
+  if (scope === 'all') return record;
+  const copy                = { ...record, programs: [scope] };
+  if (scope === 'ARV') delete copy.mmt;
+  if (scope === 'MMT') {
+    delete copy.appointments;
+    delete copy.bloodCollections;
+    delete copy.nextTca;
+    delete copy.bloodInvestigationDate;
+    delete copy.currentBloodStatus;
+    delete copy.plan;
+    delete copy.bloodOther;
+    copy.bloodInvestigations = [];
+  }
+  return copy;
+}
+
+export function buildExportPayload(records                 , scope              = 'all')                    {
+  const chosen = selectRecordsForScope(records, scope).map(r => stripToScope(r, scope));
+  return {
     app: 'ARV_KKBK',
-    version: '4.0',
-    schemaVersion: 4,
+    version: '6.0',
+    schemaVersion: 6,
     exportedAt: new Date().toISOString(),
-    totalRecords: records.length,
-    records
+    scope,
+    totalRecords: chosen.length,
+    records: chosen
   };
+}
 
-  const jsonString = JSON.stringify(payload, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
+function downloadText(filename        , text        )       {
+  const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-
-  const dateTag = new Date().toISOString().slice(0, 10);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `arv_kkbk_backup_${dateTag}.json`;
+  anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Downloads records as JSON. With a passphrase the file is encrypted (.arvenc.json);
+ * without one it is readable plain JSON, so callers should warn first.
+ */
+export async function exportRecordsToJSON(
+  records                 ,
+  options                                               = {}
+)                  {
+  const scope = options.scope ?? 'all';
+  const payload = buildExportPayload(records, scope);
+  const dateTag = new Date().toISOString().slice(0, 10);
+  const scopeTag = scope === 'all' ? '' : `_${scope.toLowerCase()}`;
+
+  if (options.passphrase) {
+    const envelope = await encryptJSON(payload, options.passphrase);
+    downloadText(`arv_kkbk${scopeTag}_backup_${dateTag}.arvenc.json`, JSON.stringify(envelope));
+  } else {
+    downloadText(`arv_kkbk${scopeTag}_backup_${dateTag}.json`, JSON.stringify(payload, null, 2));
+  }
+  return payload.totalRecords;
 }
 
                                    
@@ -40,12 +103,16 @@ const ALLOWED_STATUSES = new Set                   (['Scheduled', 'Attended', 'D
  * Validates an imported JSON string or parsed object against ARV KKBK schema.
  * Safely migrates schema version 1, 2, and 3 records to schema 4.
  */
-export function validateImportJSON(rawText        )                   {
+export function validateImportJSON(raw         )                   {
   let parsed         ;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    return { valid: false, error: 'The selected file is not a valid JSON document.' };
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { valid: false, error: 'The selected file is not a valid JSON document.' };
+    }
+  } else {
+    parsed = raw;
   }
 
   if (!parsed || typeof parsed !== 'object') {
@@ -193,7 +260,8 @@ export function validateImportJSON(rawText        )                   {
       bloodOther,
       plan,
       createdAt,
-      updatedAt
+      updatedAt,
+      ...extraFields(r)
     });
   }
 
@@ -202,4 +270,30 @@ export function validateImportJSON(rawText        )                   {
     records: validRecords,
     schemaVersion: schemaVer
   };
+}
+
+/**
+ * Fields the validator does not rebuild itself but that must survive an import:
+ * blood collection history, programs, the MMT block and deleted markers.
+ * Storage normalises them again when saving.
+ */
+function extraFields(r                         )                         {
+  const extra                         = {};
+  if (Array.isArray(r.bloodCollections)) {
+    extra.bloodCollections = r.bloodCollections                                     ;
+  }
+  if (typeof r.currentBloodStatus === 'string') {
+    extra.currentBloodStatus = r.currentBloodStatus                                       ;
+  }
+  const programs = Array.isArray(r.programs)
+    ? (r.programs.filter(p => p === 'ARV' || p === 'MMT')               )
+    : [];
+  extra.programs = programs.length ? Array.from(new Set(programs)) : ['ARV'];
+  if (r.mmt && typeof r.mmt === 'object') {
+    extra.mmt = r.mmt                        ;
+  }
+  if (typeof r.deletedAt === 'string' && r.deletedAt) {
+    extra.deletedAt = r.deletedAt;
+  }
+  return extra;
 }

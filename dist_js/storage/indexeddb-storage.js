@@ -4,8 +4,10 @@
               
                  
                              
-                       
+                        
+           
                   
+import { planMerge, isExpiredTombstone } from '../utils/merge.js';
 
 const DB_NAME = 'arv_kkbk_db';
 const DB_VERSION = 5;
@@ -137,7 +139,22 @@ export class IndexedDBStorage                           {
     return this.dbPromise;
   }
 
+  /** Live records only (not in Recently Deleted). */
   async list()                           {
+    const all = await this.listAll();
+    return all.filter(r => !r.deletedAt);
+  }
+
+  /** Records moved to Recently Deleted, newest deletion first. */
+  async listDeleted()                           {
+    const all = await this.listAll();
+    return all
+      .filter(r => !!r.deletedAt)
+      .sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''));
+  }
+
+  /** Every record including deleted ones. Backups use this so deletes sync too. */
+  async listAll()                           {
     const db = await this.getDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
@@ -290,6 +307,9 @@ export class IndexedDBStorage                           {
       nextTca: record.nextTca ? record.nextTca.trim() : undefined,
       bloodInvestigationDate: record.bloodInvestigationDate ? record.bloodInvestigationDate.trim() : undefined,
       currentBloodStatus: record.currentBloodStatus || existing?.currentBloodStatus,
+      programs: record.programs && record.programs.length ? record.programs : (existing?.programs && existing.programs.length ? existing.programs : ['ARV']),
+      mmt: record.mmt !== undefined ? record.mmt : existing?.mmt,
+      deletedAt: record.deletedAt !== undefined ? record.deletedAt : existing?.deletedAt,
       bloodInvestigations: investigations,
       bloodOther: isOtherTicked && record.bloodOther ? record.bloodOther.trim() : undefined,
       plan: record.plan ? record.plan.trim() : undefined,
@@ -545,9 +565,66 @@ export class IndexedDBStorage                           {
       bloodInvestigations: activeInvs,
       bloodOther: activeOther,
       plan: activePlan,
+      programs: this.normalizePrograms(raw.programs),
+      ...(raw.mmt && typeof raw.mmt === 'object' ? { mmt: raw.mmt } : {}),
+      ...(typeof raw.deletedAt === 'string' && raw.deletedAt ? { deletedAt: raw.deletedAt } : {}),
       createdAt: raw.createdAt || new Date().toISOString(),
       updatedAt: raw.updatedAt || new Date().toISOString()
     };
+  }
+
+          normalizePrograms(raw         )              {
+    const list = Array.isArray(raw) ? raw.filter((p)                 => p === 'ARV' || p === 'MMT') : [];
+    return list.length ? Array.from(new Set(list)) : ['ARV'];
+  }
+
+  // --- Soft delete (Recently Deleted) ---
+  async softDelete(id        )                                {
+    const rec = await this.get(id);
+    if (!rec) return null;
+    const now = new Date().toISOString();
+    const updated                = { ...rec, deletedAt: now, updatedAt: now };
+    await this.putRaw(updated);
+    return updated;
+  }
+
+  async restore(id        )                                {
+    const rec = await this.get(id);
+    if (!rec) return null;
+    const { deletedAt: _removed, ...rest } = rec;
+    const updated                = { ...rest, updatedAt: new Date().toISOString() };
+    await this.putRaw(updated);
+    return updated;
+  }
+
+  /** Permanently removes deleted records older than the retention period. */
+  async purgeExpiredDeleted()                  {
+    const deleted = await this.listDeleted();
+    const expired = deleted.filter(r => isExpiredTombstone(r));
+    for (const rec of expired) await this.delete(rec.id);
+    return expired.length;
+  }
+
+  /**
+   * Newest-wins merge for sync. Unlike bulkImport this keeps the incoming
+   * updatedAt, so records are not re-stamped and ping-ponged between devices.
+   */
+  async mergeNewer(incoming                 )                                                                                  {
+    const local = await this.listAll();
+    const normalized = incoming.map(r => this.normalizeRecord(r));
+    const plan = planMerge(local, normalized);
+    for (const rec of plan.toPut) await this.putRaw(rec);
+    return { added: plan.added, updated: plan.updated, unchanged: plan.unchanged, skipped: plan.skipped };
+  }
+
+          async putRaw(record               )                {
+    const db = await this.getDB();
+    await new Promise      ((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(record);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
   }
 
   // --- TCA Appointment Methods ---

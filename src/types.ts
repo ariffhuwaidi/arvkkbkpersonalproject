@@ -59,6 +59,64 @@ export const BLOOD_INVESTIGATION_OPTIONS = [
 
 export type BloodInvestigationOption = typeof BLOOD_INVESTIGATION_OPTIONS[number];
 
+export type ProgramId = 'ARV' | 'MMT';
+
+// ---- MMT (Methadone Maintenance Therapy) -------------------------------------
+export type MMTDispensing = 'Daily' | 'Take-home';
+export type MMTDoseStatus = 'Dispensed' | 'Missed' | 'Take-home';
+export type UrineResult = 'Negative' | 'Positive' | 'Pending';
+
+export interface MMTDoseChange {
+  id: string;
+  date: string; // YYYY-MM-DD
+  doseMg: number;
+  reason?: string;
+}
+
+export interface MMTDoseLogEntry {
+  date: string; // YYYY-MM-DD, one entry per day
+  status: MMTDoseStatus;
+  doseMg?: number;
+}
+
+export interface MMTUrineTest {
+  id: string;
+  date: string; // YYYY-MM-DD
+  result: UrineResult;
+  substances?: string; // free text, e.g. which substances were positive
+  notes?: string;
+}
+
+export interface MMTTakeHome {
+  id: string;
+  startDate: string; // YYYY-MM-DD
+  days: number; // length of supply
+  doseMg?: number;
+  notes?: string;
+}
+
+export interface MMTReview {
+  id: string;
+  date: string; // YYYY-MM-DD
+  status: AppointmentStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MMTProfile {
+  startDate?: string;
+  currentDoseMg?: number;
+  dispensing: MMTDispensing;
+  doseHistory: MMTDoseChange[];
+  doseLog: MMTDoseLogEntry[];
+  urineTests: MMTUrineTest[];
+  takeHomes: MMTTakeHome[];
+  reviews: MMTReview[];
+  notes?: string;
+  updatedAt: string; // used to merge this block independently of the ARV side
+}
+
 export interface PatientRecord {
   id: string; // Unique Patient ID
   name: string;
@@ -68,6 +126,9 @@ export interface PatientRecord {
   isActive?: boolean; // Active or Deactivated/Inactive (defaults to true)
   appointments?: TCAAppointment[]; // Complete TCA appointment history
   bloodCollections?: BloodCollectionAppointment[]; // Complete blood collection history
+  programs?: ProgramId[]; // Programs this person is enrolled in (defaults to ['ARV'])
+  mmt?: MMTProfile; // MMT enrolment data, present when programs includes 'MMT'
+  deletedAt?: string; // Set when moved to Recently Deleted (ISO timestamp)
 
   // Denormalized/helper fields pointing to current/next active appointment for list/search
   nextTca?: string; // ISO format: YYYY-MM-DD

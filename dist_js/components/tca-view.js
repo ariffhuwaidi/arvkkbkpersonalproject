@@ -27,7 +27,7 @@ export function renderTCAView(
         <line x1="8" y1="2" x2="8" y2="6"></line>
         <line x1="3" y1="10" x2="21" y2="10"></line>
       </svg>
-      <h3 class="empty-title">No TCA Appointments Scheduled</h3>
+      <h2 class="empty-title">No TCA Appointments Scheduled</h2>
       <p class="empty-desc">
         There are no matching patient appointments to display in the TCA timeline.
       </p>
@@ -45,8 +45,17 @@ export function renderTCAView(
     no_tca: []
   };
 
+  // A patient needs follow-up when overdue, or when the last visit was a DNA and nothing is booked
+  const lastDNA = (r               )          => {
+    const apts = Array.isArray(r.appointments) ? [...r.appointments] : [];
+    if (apts.length === 0) return false;
+    apts.sort((a, b) => b.tcaDate.localeCompare(a.tcaDate));
+    return apts[0].status === 'DNA';
+  };
+
   for (const r of records) {
-    const key = getTCAGroupKey(r.nextTca);
+    let key = getTCAGroupKey(r.nextTca);
+    if (key === 'no_tca' && r.isActive !== false && lastDNA(r)) key = 'overdue';
     groups[key].push(r);
   }
 
@@ -64,7 +73,7 @@ export function renderTCAView(
   groups.no_tca.sort((a, b) => a.name.localeCompare(b.name));
 
   const sectionsConfig                                                                               = [
-    { key: 'overdue', title: 'Overdue', count: groups.overdue.length, className: 'section-overdue' },
+    { key: 'overdue', title: 'Needs follow-up', count: groups.overdue.length, className: 'section-overdue' },
     { key: 'this_week', title: 'This Week (Next 7 Days)', count: groups.this_week.length, className: 'section-upcoming' },
     { key: 'this_month', title: 'This Month', count: groups.this_month.length, className: 'section-month' },
     { key: 'later', title: 'Later', count: groups.later.length, className: 'section-later' }

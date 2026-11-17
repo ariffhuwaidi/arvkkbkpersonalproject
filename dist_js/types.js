@@ -59,6 +59,64 @@ export const BLOOD_INVESTIGATION_OPTIONS = [
 
                                                                                   
 
+                                      
+
+// ---- MMT (Methadone Maintenance Therapy) -------------------------------------
+                                                  
+                                                                 
+                                                              
+
+                                
+             
+                             
+                 
+                  
+ 
+
+                                  
+                                                
+                        
+                  
+ 
+
+                               
+             
+                             
+                      
+                                                                        
+                 
+ 
+
+                              
+             
+                                  
+                                   
+                  
+                 
+ 
+
+                            
+             
+                             
+                            
+                 
+                    
+                    
+ 
+
+                             
+                     
+                         
+                            
+                               
+                             
+                             
+                           
+                       
+                 
+                                                                              
+ 
+
                                 
                                   
                
@@ -68,6 +126,9 @@ export const BLOOD_INVESTIGATION_OPTIONS = [
                                                                           
                                                                       
                                                                                        
+                                                                                      
+                                                                               
+                                                                           
 
                                                                                            
                                              
