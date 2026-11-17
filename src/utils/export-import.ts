@@ -1,6 +1,7 @@
 import { BLOOD_INVESTIGATION_OPTIONS } from '../types';
 import type { PatientRecord, PatientType, TCAAppointment, AppointmentStatus, ProgramId } from '../types';
 import { encryptJSON } from './crypto';
+import { sanitizeMMT } from './mmt';
 
 export const CURRENT_SCHEMA_VERSION = 6;
 
@@ -102,7 +103,7 @@ const ALLOWED_STATUSES = new Set<AppointmentStatus>(['Scheduled', 'Attended', 'D
 
 /**
  * Validates an imported JSON string or parsed object against ARV KKBK schema.
- * Safely migrates schema version 1, 2, and 3 records to schema 4.
+ * Accepts older schema versions and migrates them to the current one.
  */
 export function validateImportJSON(raw: unknown): ValidationResult {
   let parsed: unknown;
@@ -290,9 +291,8 @@ function extraFields(r: Record<string, unknown>): Partial<PatientRecord> {
     ? (r.programs.filter(p => p === 'ARV' || p === 'MMT') as ProgramId[])
     : [];
   extra.programs = programs.length ? Array.from(new Set(programs)) : ['ARV'];
-  if (r.mmt && typeof r.mmt === 'object') {
-    extra.mmt = r.mmt as PatientRecord['mmt'];
-  }
+  const mmt = sanitizeMMT(r.mmt);
+  if (mmt) extra.mmt = mmt;
   if (typeof r.deletedAt === 'string' && r.deletedAt) {
     extra.deletedAt = r.deletedAt;
   }

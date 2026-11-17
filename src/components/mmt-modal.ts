@@ -1,11 +1,8 @@
 import type { PatientRecord, MMTProfile, MMTDispensing, MMTDoseStatus, UrineResult, AppointmentStatus } from '../types';
 import { addDays, doseStatusOn, latestUrine, missedDays, nextReview, urineDue } from '../utils/mmt';
 import { formatDisplayDate, getLocalTodayISO } from '../utils/date';
+import { escapeHtml } from '../utils/escape';
 import { toast } from './toast';
-
-function esc(s: string): string {
-  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
 
 function uid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
@@ -115,12 +112,12 @@ export class MMTModal {
     this.bodyEl.innerHTML = `
       <div class="mmt-sheet">
         <div class="mmt-summary">
-          <div><span class="mmt-k">IC</span><span class="mmt-v">${esc(rec.icNumber)}</span></div>
-          <div><span class="mmt-k">Dose</span><span class="mmt-v">${mmt.currentDoseMg !== undefined ? `${mmt.currentDoseMg} mg` : 'Not set'}</span></div>
-          <div><span class="mmt-k">Today</span><span class="mmt-v">${todayStatus ?? 'Not yet dispensed'}</span></div>
+          <div><span class="mmt-k">IC</span><span class="mmt-v">${escapeHtml(rec.icNumber)}</span></div>
+          <div><span class="mmt-k">Dose</span><span class="mmt-v">${mmt.currentDoseMg !== undefined ? `${escapeHtml(mmt.currentDoseMg)} mg` : 'Not set'}</span></div>
+          <div><span class="mmt-k">Today</span><span class="mmt-v">${escapeHtml(todayStatus ?? 'Not yet dispensed')}</span></div>
           <div><span class="mmt-k">Missed</span><span class="mmt-v">${missed} ${missed === 1 ? 'day' : 'days'}</span></div>
           <div><span class="mmt-k">Next review</span><span class="mmt-v">${review ? formatDisplayDate(review.date) : 'None'}</span></div>
-          <div><span class="mmt-k">Last urine</span><span class="mmt-v">${urine ? `${formatDisplayDate(urine.date)} (${urine.result})` : 'None'}${urineDue(mmt, today) ? ' · due' : ''}</span></div>
+          <div><span class="mmt-k">Last urine</span><span class="mmt-v">${urine ? `${formatDisplayDate(urine.date)} (${escapeHtml(urine.result)})` : 'None'}${urineDue(mmt, today) ? ' · due' : ''}</span></div>
         </div>
 
         <section class="mmt-section">
@@ -134,12 +131,12 @@ export class MMTModal {
               <option value="Missed">Missed</option>
             </select>
             <label class="pp-label">Dose (mg)</label>
-            <input class="form-input" type="number" name="dose" step="any" min="0" inputmode="decimal" value="${esc(defaultDose)}" />
+            <input class="form-input" type="number" name="dose" step="any" min="0" inputmode="decimal" value="${escapeHtml(defaultDose)}" />
             <button type="submit" class="btn-primary">Log dose</button>
           </form>
           ${doseLog.length ? `<ul class="mmt-list">${doseLog.map(e => `
-            <li><span>${formatDisplayDate(e.date)}</span><span>${e.status}${e.doseMg !== undefined ? ` · ${e.doseMg} mg` : ''}</span>
-            <button type="button" class="mmt-del" data-del-dose="${e.date}" aria-label="Remove entry">Remove</button></li>`).join('')}</ul>` : '<p class="mmt-empty">No doses logged yet.</p>'}
+            <li><span>${formatDisplayDate(e.date)}</span><span>${escapeHtml(e.status)}${e.doseMg !== undefined ? ` · ${escapeHtml(e.doseMg)} mg` : ''}</span>
+            <button type="button" class="mmt-del" data-del-dose="${escapeHtml(e.date)}" aria-label="Remove entry">Remove</button></li>`).join('')}</ul>` : '<p class="mmt-empty">No doses logged yet.</p>'}
         </section>
 
         <section class="mmt-section">
@@ -158,7 +155,7 @@ export class MMTModal {
             <button type="submit" class="btn-secondary" style="font-weight:600;">Save dose change</button>
           </form>
           </details>
-          ${history.length ? `<ul class="mmt-list">${history.map(h => `<li><span>${formatDisplayDate(h.date)}</span><span>${h.doseMg} mg${h.reason ? ` · ${esc(h.reason)}` : ''}</span></li>`).join('')}</ul>` : ''}
+          ${history.length ? `<ul class="mmt-list">${history.map(h => `<li><span>${formatDisplayDate(h.date)}</span><span>${escapeHtml(h.doseMg)} mg${h.reason ? ` · ${escapeHtml(h.reason)}` : ''}</span></li>`).join('')}</ul>` : ''}
         </section>
 
         <section class="mmt-section">
@@ -170,13 +167,13 @@ export class MMTModal {
             <label class="pp-label">Days of supply</label>
             <input class="form-input" type="number" name="days" min="1" max="60" inputmode="numeric" required />
             <label class="pp-label">Dose per day (mg)</label>
-            <input class="form-input" type="number" name="dose" step="any" min="0" inputmode="decimal" value="${esc(defaultDose)}" />
+            <input class="form-input" type="number" name="dose" step="any" min="0" inputmode="decimal" value="${escapeHtml(defaultDose)}" />
             <button type="submit" class="btn-secondary" style="font-weight:600;">Add take-home</button>
           </form>
           </details>
           ${takeHomes.length ? `<ul class="mmt-list">${takeHomes.map(t => `
-            <li><span>${formatDisplayDate(t.startDate)} to ${formatDisplayDate(addDays(t.startDate, t.days - 1))}</span><span>${t.days} ${t.days === 1 ? 'day' : 'days'}${t.doseMg !== undefined ? ` · ${t.doseMg} mg` : ''}</span>
-            <button type="button" class="mmt-del" data-del-th="${t.id}">Remove</button></li>`).join('')}</ul>` : ''}
+            <li><span>${formatDisplayDate(t.startDate)} to ${formatDisplayDate(addDays(t.startDate, t.days - 1))}</span><span>${escapeHtml(t.days)} ${t.days === 1 ? 'day' : 'days'}${t.doseMg !== undefined ? ` · ${escapeHtml(t.doseMg)} mg` : ''}</span>
+            <button type="button" class="mmt-del" data-del-th="${escapeHtml(t.id)}">Remove</button></li>`).join('')}</ul>` : ''}
         </section>
 
         <section class="mmt-section">
@@ -195,8 +192,8 @@ export class MMTModal {
           </form>
           </details>
           ${urines.length ? `<ul class="mmt-list">${urines.map(u => `
-            <li><span>${formatDisplayDate(u.date)}</span><span>${u.result}${u.substances ? ` · ${esc(u.substances)}` : ''}</span>
-            <span class="mmt-row-actions">${u.result === 'Pending' ? `<button type="button" class="mmt-act" data-urine-set="${u.id}:Negative">Negative</button><button type="button" class="mmt-act" data-urine-set="${u.id}:Positive">Positive</button>` : ''}<button type="button" class="mmt-del" data-del-urine="${u.id}">Remove</button></span></li>`).join('')}</ul>` : ''}
+            <li><span>${formatDisplayDate(u.date)}</span><span>${escapeHtml(u.result)}${u.substances ? ` · ${escapeHtml(u.substances)}` : ''}</span>
+            <span class="mmt-row-actions">${u.result === 'Pending' ? `<button type="button" class="mmt-act" data-urine-set="${escapeHtml(u.id)}:Negative">Negative</button><button type="button" class="mmt-act" data-urine-set="${escapeHtml(u.id)}:Positive">Positive</button>` : ''}<button type="button" class="mmt-del" data-del-urine="${escapeHtml(u.id)}">Remove</button></span></li>`).join('')}</ul>` : ''}
         </section>
 
         <section class="mmt-section">
@@ -209,13 +206,13 @@ export class MMTModal {
           </form>
           </details>
           ${reviews.length ? `<ul class="mmt-list">${reviews.map(r => `
-            <li><span>${formatDisplayDate(r.date)}</span><span>${r.status}</span>
-            <span class="mmt-row-actions">${r.status === 'Scheduled' ? `<button type="button" class="mmt-act" data-review-set="${r.id}:Attended">Attended</button><button type="button" class="mmt-act" data-review-set="${r.id}:DNA">DNA</button>` : ''}<button type="button" class="mmt-del" data-del-review="${r.id}">Remove</button></span></li>`).join('')}</ul>` : ''}
+            <li><span>${formatDisplayDate(r.date)}</span><span>${escapeHtml(r.status)}</span>
+            <span class="mmt-row-actions">${r.status === 'Scheduled' ? `<button type="button" class="mmt-act" data-review-set="${escapeHtml(r.id)}:Attended">Attended</button><button type="button" class="mmt-act" data-review-set="${escapeHtml(r.id)}:DNA">DNA</button>` : ''}<button type="button" class="mmt-del" data-del-review="${escapeHtml(r.id)}">Remove</button></span></li>`).join('')}</ul>` : ''}
         </section>
 
         <section class="mmt-section">
           <h3 class="mmt-h">Notes</h3>
-          <textarea class="form-input" id="mmt-notes" rows="3" style="min-height: 84px;">${esc(mmt.notes || '')}</textarea>
+          <textarea class="form-input" id="mmt-notes" rows="3" style="min-height: 84px;">${escapeHtml(mmt.notes || '')}</textarea>
           <button type="button" class="btn-secondary" id="mmt-save-notes" style="font-weight:600; margin-top: 8px;">Save notes</button>
         </section>
 

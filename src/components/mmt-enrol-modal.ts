@@ -1,9 +1,6 @@
 import type { PatientRecord, MMTDispensing } from '../types';
 import { getLocalTodayISO } from '../utils/date';
-
-function esc(s: string): string {
-  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+import { escapeHtml } from '../utils/escape';
 
 export interface MMTEnrolData {
   existingId?: string;
@@ -52,7 +49,7 @@ export class MMTEnrolModal {
           <label class="pp-label" for="mmt-existing">Already registered in ARV?</label>
           <select class="form-input" id="mmt-existing" name="existing">
             <option value="">No, register a new person</option>
-            ${sorted.map(r => `<option value="${esc(r.id)}">${esc(r.name)} (${esc(r.icNumber)})</option>`).join('')}
+            ${sorted.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)} (${escapeHtml(r.icNumber)})</option>`).join('')}
           </select>` : ''}
           <div id="mmt-new-fields">
             <label class="pp-label" for="mmt-name">Name</label>

@@ -173,7 +173,10 @@ runTest('3.1 Google Drive Backup target folder ID and OAuth scope configured cor
   const gdriveContent = fs.readFileSync(path.join(rootDir, 'src', 'utils', 'google-drive.ts'), 'utf-8');
   assert(gdriveContent.includes('1KSu4II21PraMavPwi6q2Y3ZUdPnedMVS'), 'Folder ID 1KSu4II21PraMavPwi6q2Y3ZUdPnedMVS missing');
   assert(gdriveContent.includes('https://www.googleapis.com/auth/drive.file'), 'Missing drive.file scope');
-  assert(gdriveContent.includes('arv_kkbk_pre_restore_safety_backup'), 'Missing pre-restore safety backup snapshot');
+  const settingsContent = fs.readFileSync(path.join(rootDir, 'src', 'components', 'settings-modal.ts'), 'utf-8');
+  const safetyContent = fs.readFileSync(path.join(rootDir, 'src', 'storage', 'safety-snapshot.ts'), 'utf-8');
+  assert(settingsContent.includes('await saveSafetySnapshot('), 'Missing pre-restore safety backup snapshot');
+  assert(safetyContent.includes('indexedDB.open'), 'Safety snapshot must be stored in IndexedDB, not localStorage');
   assert(gdriveContent.includes('scheduleAutoBackup'), 'Missing debounced scheduleAutoBackup');
   assert(gdriveContent.includes('backupPayload'), 'Missing backupPayload construction');
 });

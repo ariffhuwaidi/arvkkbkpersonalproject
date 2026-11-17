@@ -47,7 +47,7 @@ A mobile-first, iOS-inspired personal record tracker designed primarily for iPho
 4. **100% Local Device Storage & Safe Migration**:
    - Patient records are persisted solely in the device's **IndexedDB** (`arv_kkbk_db`, Schema Version 3).
    - Safe automated migration seamlessly migrates legacy combined `bloodInvestigationsPlan` into the new `plan` field with zero data loss.
-   - `localStorage` is restricted exclusively to user preferences (Theme, Sort order, Active tab). No patient records ever touch `localStorage`.
+   - `localStorage` holds only settings (theme, sort order, active tab, current program, PIN lock and backup-encryption settings). No patient records ever touch `localStorage`; the safety copy taken before a Replace import or Drive restore is kept in its own IndexedDB database (`arv_kkbk_safety`) for 7 days.
    - Zero telemetry, zero analytics, zero external network requests.
 
 5. **Safe Data Portability (Export & Import)**:

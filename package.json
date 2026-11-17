@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "compile": "node scripts/build.js",
-    "test": "node scripts/build.js && node scripts/test_all_features.js && node scripts/test_complete_feature_update.js && node scripts/test_four_fixes.js && node scripts/test_message_generator_refined.js && node scripts/test_redesign_and_patient_mgmt.js && node scripts/test_browser_simulation.js && node scripts/test_foundation.mjs && node scripts/test_mmt.mjs"
+    "test": "node scripts/build.js && node scripts/test_all_features.js && node scripts/test_complete_feature_update.js && node scripts/test_four_fixes.js && node scripts/test_message_generator_refined.js && node scripts/test_redesign_and_patient_mgmt.js && node scripts/test_browser_simulation.js && node scripts/test_foundation.mjs && node scripts/test_mmt.mjs && node scripts/test_review_fixes.mjs"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

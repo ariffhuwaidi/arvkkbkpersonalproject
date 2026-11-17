@@ -8,6 +8,7 @@ import type {
   ProgramId
 } from '../types';
 import { planMerge, isExpiredTombstone } from '../utils/merge';
+import { sanitizeMMT } from '../utils/mmt';
 
 const DB_NAME = 'arv_kkbk_db';
 const DB_VERSION = 5;
@@ -365,50 +366,31 @@ export class IndexedDBStorage implements IRecordStorage {
     });
   }
 
+  /**
+   * Merge: newest edit per patient wins and programs are combined (same rules
+   * as Sync Now), so importing a one-program file never drops the other program.
+   * Replace: erases the database and writes the file's records.
+   */
   async bulkImport(records: PatientRecord[], mode: 'merge' | 'replace'): Promise<{ count: number }> {
-    const db = await this.getDB();
-    const existingList = mode === 'merge' ? await this.list() : [];
-    const existingByIC = new Map<string, PatientRecord>();
-    const existingById = new Map<string, PatientRecord>();
-
     if (mode === 'merge') {
-      for (const rec of existingList) {
-        existingById.set(rec.id, rec);
-        const normIC = rec.icNumber.replace(/[\s-]/g, '').toLowerCase();
-        if (normIC) {
-          existingByIC.set(normIC, rec);
-        }
-      }
+      const result = await this.mergeNewer(records);
+      return { count: result.added + result.updated };
     }
 
+    const db = await this.getDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-
-      if (mode === 'replace') {
-        store.clear();
-      }
+      store.clear();
 
       let count = 0;
       for (const raw of records) {
         const r = this.normalizeRecord(raw);
-        const normIC = (r.icNumber || '').replace(/[\s-]/g, '').toLowerCase();
-        let targetId = r.id;
-        let originalCreatedAt = r.createdAt;
-
-        if (mode === 'merge') {
-          const match = existingById.get(r.id) || (normIC ? existingByIC.get(normIC) : undefined);
-          if (match) {
-            targetId = match.id;
-            originalCreatedAt = match.createdAt;
-          }
-        }
-
         const now = new Date().toISOString();
         const recordToSave: PatientRecord = {
           ...r,
-          id: targetId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
-          createdAt: originalCreatedAt || r.createdAt || now,
+          id: r.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+          createdAt: r.createdAt || now,
           updatedAt: now
         };
 
@@ -566,7 +548,7 @@ export class IndexedDBStorage implements IRecordStorage {
       bloodOther: activeOther,
       plan: activePlan,
       programs: this.normalizePrograms(raw.programs),
-      ...(raw.mmt && typeof raw.mmt === 'object' ? { mmt: raw.mmt } : {}),
+      ...(raw.mmt && typeof raw.mmt === 'object' ? { mmt: sanitizeMMT(raw.mmt) } : {}),
       ...(typeof raw.deletedAt === 'string' && raw.deletedAt ? { deletedAt: raw.deletedAt } : {}),
       createdAt: raw.createdAt || new Date().toISOString(),
       updatedAt: raw.updatedAt || new Date().toISOString()

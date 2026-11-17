@@ -69,6 +69,7 @@ console.log('Generating standalone app.bundle.js...');
 const modulesInOrder = [
   'types',
   'storage/storage-interface',
+  'utils/escape',
   'utils/date',
   'utils/theme',
   'utils/search',
@@ -79,6 +80,7 @@ const modulesInOrder = [
   'utils/app-lock',
   'utils/demo-data',
   'storage/indexeddb-storage',
+  'storage/safety-snapshot',
   'components/toast',
   'components/confirm-sheet',
   'utils/export-import',

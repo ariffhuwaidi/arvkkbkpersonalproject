@@ -16,6 +16,7 @@ import type {
   MMTProfile
 } from './types';
 import { recordStorage } from './storage/indexeddb-storage';
+import { migrateLegacySafetySnapshot } from './storage/safety-snapshot';
 import { themeManager } from './utils/theme';
 import { getSavedSort, saveSortPreference, sortRecords, SORT_OPTIONS } from './utils/sort';
 import { filterRecords } from './utils/search';
@@ -775,6 +776,7 @@ class App {
 
   private async startupHousekeeping(): Promise<void> {
     try { await recordStorage.purgeExpiredDeleted(); } catch (e) { console.warn(e); }
+    await migrateLegacySafetySnapshot();
     try {
       if (navigator.storage && navigator.storage.persist) await navigator.storage.persist();
     } catch { /* not supported */ }

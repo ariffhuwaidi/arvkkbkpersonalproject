@@ -14,7 +14,6 @@ export const GDRIVE_TOKEN_KEY = 'arv_kkbk_gdrive_access_token';
 export const GDRIVE_TOKEN_EXP_KEY = 'arv_kkbk_gdrive_token_exp';
 export const GDRIVE_LAST_BACKUP_KEY = 'arv_kkbk_gdrive_last_backup_time';
 export const GDRIVE_LAST_FILE_KEY = 'arv_kkbk_gdrive_last_backup_file';
-export const PRE_RESTORE_SAFETY_KEY = 'arv_kkbk_pre_restore_safety_backup';
 
 export class GoogleDriveBackupService {
   private status: GoogleDriveBackupStatus = 'Not Connected';
@@ -440,22 +439,6 @@ export class GoogleDriveBackupService {
   public async getNewestBackup(): Promise<GoogleDriveBackupFile | null> {
     const files = await this.listBackups();
     return files.length > 0 ? files[0] : null;
-  }
-
-  /**
-   * Creates an emergency pre-restore safety snapshot of current local records.
-   */
-  public savePreRestoreSafetySnapshot(records: PatientRecord[]): void {
-    try {
-      const snapshot = {
-        snapshotTime: new Date().toISOString(),
-        recordsCount: records.length,
-        records
-      };
-      localStorage.setItem(PRE_RESTORE_SAFETY_KEY, JSON.stringify(snapshot));
-    } catch (err) {
-      console.warn('Failed to save pre-restore safety snapshot to localStorage:', err);
-    }
   }
 }
 

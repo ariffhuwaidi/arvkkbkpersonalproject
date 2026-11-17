@@ -1,4 +1,4 @@
-import type { MMTProfile, MMTDoseStatus, MMTReview, MMTUrineTest, PatientRecord, ProgramId } from '../types';
+import type { AppointmentStatus, MMTDoseChange, MMTDoseLogEntry, MMTProfile, MMTDoseStatus, MMTReview, MMTTakeHome, MMTUrineTest, PatientRecord, ProgramId, UrineResult } from '../types';
 
 /**
  * Pure MMT helpers. Dates are YYYY-MM-DD strings; "today" is always passed in
@@ -126,6 +126,98 @@ export function reviewGroup(record: PatientRecord, today: string): MMTReviewGrou
   return daysBetween(today, review.date) <= 7 ? 'this_week' : 'later';
 }
 
-export function todayDose(mmt: MMTProfile): number | undefined {
-  return mmt.currentDoseMg;
+// ---- Cleaning MMT data that comes from outside (imports, Drive, sync) --------
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const SAFE_ID = /^[\w-]{1,80}$/;
+const DOSE_STATUSES: MMTDoseStatus[] = ['Dispensed', 'Missed', 'Take-home'];
+const URINE_RESULTS: UrineResult[] = ['Negative', 'Positive', 'Pending'];
+const REVIEW_STATUSES: AppointmentStatus[] = ['Scheduled', 'Attended', 'DNA', 'Rescheduled', 'Cancelled'];
+
+function mmtCleanDate(v: unknown): string | undefined {
+  return typeof v === 'string' && ISO_DATE.test(v.trim()) ? v.trim() : undefined;
+}
+
+function mmtCleanNum(v: unknown): number | undefined {
+  const n = typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
+function mmtCleanText(v: unknown): string | undefined {
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+function mmtCleanId(v: unknown, prefix: string, i: number): string {
+  return typeof v === 'string' && SAFE_ID.test(v) ? v : `${prefix}_${i}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function mmtCleanList(v: unknown): Record<string, unknown>[] {
+  return Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object') : [];
+}
+
+/**
+ * Rebuilds an MMT block from untrusted data, keeping only known values.
+ * Dates must be YYYY-MM-DD, statuses must be known, ids must be plain. Free
+ * text (notes, reasons, substances) is kept and escaped wherever it is shown.
+ * Returns undefined when the input is not an object.
+ */
+export function sanitizeMMT(raw: unknown): MMTProfile | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const m = raw as Record<string, unknown>;
+  const now = new Date().toISOString();
+
+  const doseHistory: MMTDoseChange[] = [];
+  mmtCleanList(m.doseHistory).forEach((h, i) => {
+    const date = mmtCleanDate(h.date); const doseMg = mmtCleanNum(h.doseMg);
+    if (date && doseMg !== undefined) doseHistory.push({ id: mmtCleanId(h.id, 'dh', i), date, doseMg, ...(mmtCleanText(h.reason) ? { reason: mmtCleanText(h.reason) } : {}) });
+  });
+
+  const doseLog: MMTDoseLogEntry[] = [];
+  mmtCleanList(m.doseLog).forEach(e => {
+    const date = mmtCleanDate(e.date);
+    if (!date || !DOSE_STATUSES.includes(e.status as MMTDoseStatus)) return;
+    const doseMg = mmtCleanNum(e.doseMg);
+    doseLog.push({ date, status: e.status as MMTDoseStatus, ...(doseMg !== undefined ? { doseMg } : {}) });
+  });
+
+  const urineTests: MMTUrineTest[] = [];
+  mmtCleanList(m.urineTests).forEach((u, i) => {
+    const date = mmtCleanDate(u.date);
+    if (!date) return;
+    const result = URINE_RESULTS.includes(u.result as UrineResult) ? (u.result as UrineResult) : 'Pending';
+    urineTests.push({ id: mmtCleanId(u.id, 'ut', i), date, result, ...(mmtCleanText(u.substances) ? { substances: mmtCleanText(u.substances) } : {}), ...(mmtCleanText(u.notes) ? { notes: mmtCleanText(u.notes) } : {}) });
+  });
+
+  const takeHomes: MMTTakeHome[] = [];
+  mmtCleanList(m.takeHomes).forEach((t, i) => {
+    const startDate = mmtCleanDate(t.startDate); const days = mmtCleanNum(t.days);
+    if (!startDate || days === undefined || days < 1 || !Number.isInteger(days)) return;
+    const doseMg = mmtCleanNum(t.doseMg);
+    takeHomes.push({ id: mmtCleanId(t.id, 'th', i), startDate, days, ...(doseMg !== undefined ? { doseMg } : {}), ...(mmtCleanText(t.notes) ? { notes: mmtCleanText(t.notes) } : {}) });
+  });
+
+  const reviews: MMTReview[] = [];
+  mmtCleanList(m.reviews).forEach((r, i) => {
+    const date = mmtCleanDate(r.date);
+    if (!date) return;
+    const status = REVIEW_STATUSES.includes(r.status as AppointmentStatus) ? (r.status as AppointmentStatus) : 'Scheduled';
+    reviews.push({
+      id: mmtCleanId(r.id, 'rv', i), date, status,
+      ...(mmtCleanText(r.notes) ? { notes: mmtCleanText(r.notes) } : {}),
+      createdAt: typeof r.createdAt === 'string' ? r.createdAt : now,
+      updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : now
+    });
+  });
+
+  const startDate = mmtCleanDate(m.startDate);
+  const currentDoseMg = mmtCleanNum(m.currentDoseMg);
+  const notes = mmtCleanText(m.notes);
+  return {
+    ...(startDate ? { startDate } : {}),
+    ...(currentDoseMg !== undefined ? { currentDoseMg } : {}),
+    dispensing: m.dispensing === 'Take-home' ? 'Take-home' : 'Daily',
+    doseHistory, doseLog, urineTests, takeHomes, reviews,
+    ...(notes ? { notes } : {}),
+    updatedAt: typeof m.updatedAt === 'string' ? m.updatedAt : now
+  };
 }

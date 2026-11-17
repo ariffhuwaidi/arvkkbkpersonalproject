@@ -1,10 +1,7 @@
 import type { PatientRecord, MMTDoseStatus } from '../types';
 import { doseStatusOn, latestUrine, missedDays, nextReview, urineDue, MISSED_DOSE_ALERT_DAYS } from '../utils/mmt';
 import { formatDisplayDate, getLocalTodayISO } from '../utils/date';
-
-function esc(s: string): string {
-  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { escapeHtml } from '../utils/escape';
 
 export interface MMTCardActions {
   onView: () => void;
@@ -51,17 +48,17 @@ export function createMMTCard(record: PatientRecord, actions: MMTCardActions): H
   card.innerHTML = `
     <div class="card-top">
       <div class="card-name-group">
-        <h3 class="card-name">${esc(record.name)}</h3>
-        <span class="mmt-mode-tag">${doseText} · ${mmt.dispensing === 'Daily' ? 'Daily dispensing' : 'Take-home'}</span>
+        <h3 class="card-name">${escapeHtml(record.name)}</h3>
+        <span class="mmt-mode-tag">${escapeHtml(doseText)} ·${mmt.dispensing === 'Daily' ? 'Daily dispensing' : 'Take-home'}</span>
       </div>
     </div>
     <div class="card-meta-row">
-      <span class="meta-item">IC: ${esc(record.icNumber)}</span>
+      <span class="meta-item">IC: ${escapeHtml(record.icNumber)}</span>
     </div>
     <div class="mmt-chip-row">${todayHtml}${missedHtml}</div>
     <div class="mmt-meta-lines">
-      <span>${esc(reviewText)}</span>
-      <span>${esc(urineText + urineFlag)}</span>
+      <span>${escapeHtml(reviewText)}</span>
+      <span>${escapeHtml(urineText + urineFlag)}</span>
     </div>
     ${canQuick ? `
     <div class="mmt-quick">

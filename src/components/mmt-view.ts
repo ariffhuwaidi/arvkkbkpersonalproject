@@ -2,10 +2,7 @@ import type { PatientRecord } from '../types';
 import { followUpReasons, missedDays, nextReview, reviewGroup, urineDue } from '../utils/mmt';
 import type { MMTReviewGroup } from '../utils/mmt';
 import { formatDisplayDate, getLocalTodayISO, getRelativeTCALabel } from '../utils/date';
-
-function esc(s: string): string {
-  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+import { escapeHtml } from '../utils/escape';
 
 /** The second tab while in MMT: who needs follow-up, and upcoming reviews. */
 export function renderMMTReviewView(records: PatientRecord[], onOpen: (r: PatientRecord) => void): HTMLElement {
@@ -66,8 +63,8 @@ export function renderMMTReviewView(records: PatientRecord[], onOpen: (r: Patien
       row.setAttribute('aria-label', `View MMT profile for ${r.name}`);
       row.innerHTML = `
         <div class="tca-row-main">
-          <div class="tca-row-title-line"><span class="tca-patient-name">${esc(r.name)}</span></div>
-          <div class="tca-row-sub"><span class="tca-relative-text">${esc(bits.join(' · ') || 'Nothing scheduled')}</span></div>
+          <div class="tca-row-title-line"><span class="tca-patient-name">${escapeHtml(r.name)}</span></div>
+          <div class="tca-row-sub"><span class="tca-relative-text">${escapeHtml(bits.join(' · ') || 'Nothing scheduled')}</span></div>
         </div>
         <div class="tca-row-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></div>`;
       row.addEventListener('click', () => onOpen(r));

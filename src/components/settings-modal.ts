@@ -24,6 +24,7 @@ import {
   setBackupEncryptionEnabled
 } from '../utils/backup-passphrase';
 import { DELETE_RETENTION_DAYS } from '../utils/merge';
+import { saveSafetySnapshot } from '../storage/safety-snapshot';
 import { MessageGenerator } from './message-generator';
 import { confirmSheet } from './confirm-sheet';
 import { toast } from './toast';
@@ -467,8 +468,7 @@ export class SettingsModal {
 
       // Create safety snapshot of local data before restoration
       if (this.getRecordsCallback) {
-        const currentRecords = await this.getRecordsCallback();
-        googleDriveService.savePreRestoreSafetySnapshot(currentRecords);
+        await saveSafetySnapshot(await this.getRecordsCallback());
       }
 
       if (this.onImportCallback) {
@@ -603,7 +603,7 @@ export class SettingsModal {
           });
           if (!sure) return;
           if (this.getRecordsCallback) {
-            googleDriveService.savePreRestoreSafetySnapshot(await this.getRecordsCallback());
+            await saveSafetySnapshot(await this.getRecordsCallback());
           }
         }
 

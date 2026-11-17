@@ -184,7 +184,7 @@ export interface IRecordStorage {
   get(id: string): Promise<PatientRecord | null>;
   save(record: Omit<PatientRecord, 'createdAt' | 'updatedAt'> & { createdAt?: string; updatedAt?: string }): Promise<PatientRecord>;
   delete(id: string): Promise<boolean>;
-  bulkImport(records: PatientRecord[], mode: 'merge' | 'replace'): Promise<number>;
+  bulkImport(records: PatientRecord[], mode: 'merge' | 'replace'): Promise<{ count: number }>;
   clear(): Promise<void>;
 }
 
